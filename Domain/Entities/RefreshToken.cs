@@ -19,8 +19,8 @@ public class RefreshToken : IAuditableEntity
   public ApplicationUser? User { get; set; }
 
   // Audit fields
-  public DateTime CreatedAt { get; set; }
-  public required string CreatedBy { get; set; }
+  public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+  public string? CreatedBy { get; set; }
   public DateTime? UpdatedAt { get; set; }
   public string? UpdatedBy { get; set; }
 

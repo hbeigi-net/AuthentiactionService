@@ -13,10 +13,10 @@ public class ApplicationRole : IdentityRole<Guid>, IAuditableEntity
   public DateTime? UpdatedAt { get; set; }
   public string? UpdatedBy { get; set; }
 
-  public virtual ICollection<ApplicationUserRole> UserRoles { get; set; } = new List<ApplicationUserRole>();
+  public virtual ICollection<ApplicationUserRole> RoleUsers { get; set; } = new List<ApplicationUserRole>();
   public virtual ICollection<ApplicationRoleClaim> RoleClaims { get; set; } = [];
 
-  public ApplicationRole() { }
+  private ApplicationRole() { }
 
   public ApplicationRole(string roleName, string? description = null)
   : base(roleName)
