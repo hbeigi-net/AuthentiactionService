@@ -1,6 +1,7 @@
 using System;
 using FluentResults;
 using Application.Core;
+using FluentValidation;
 namespace Presentation.Middlewares;
 
 internal sealed class GlobalExceptionHandler(
@@ -20,10 +21,11 @@ internal sealed class GlobalExceptionHandler(
     }
     catch (Exception exp)
     {
-      _logger.LogError(httpContext.TraceIdentifier, exp);
+      //_logger.LogError(httpContext.TraceIdentifier, exp);
       int statusCode = exp.GetType().Name switch
       {
         "ApplicationException" => StatusCodes.Status400BadRequest,
+        "ValidationException" => StatusCodes.Status400BadRequest,
         _ => StatusCodes.Status500InternalServerError,
       };
 
@@ -33,8 +35,21 @@ internal sealed class GlobalExceptionHandler(
         ErrorMessage = exp.Message,
         StackTrace = _hostEnvironment.IsDevelopment() ?  exp.StackTrace : null,
         IsSuccess = false,
+        Errors = null,
+        Result = null,
       };
-      
+
+      if(exp is ValidationException validationException) {
+        errorResponse.Errors = validationException.Errors
+          .GroupBy(e => e.PropertyName)
+          .ToDictionary(
+              g => g.Key, 
+              g => g.Select(e => e.ErrorMessage).ToArray()
+          );
+
+        errorResponse.ErrorMessage = "Validation Error";
+      }
+
       httpContext.Response.ContentType = "application/json";
       httpContext.Response.StatusCode = statusCode;
       await httpContext.Response.WriteAsJsonAsync(errorResponse);

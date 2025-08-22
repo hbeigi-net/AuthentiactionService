@@ -14,7 +14,7 @@ public class ApplicationUser : IdentityUser<Guid>, IAuditableEntity
   public string? ProfilePicture { get; set; }
   // Audit fields
   public DateTime CreatedAt { get; set; }
-  public required string CreatedBy { get; set; }
+  public string? CreatedBy { get; set; } = "user";
   public DateTime? UpdatedAt { get; set; }
   public string? UpdatedBy { get; set; }
 

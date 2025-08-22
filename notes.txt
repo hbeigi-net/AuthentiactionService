@@ -1,3 +1,16 @@
 # add dto for updating user 
 # fluent result always set the status code to 200 in success and fail
 # IsInRoleAsync method in ApplicaitonUserRepository uses a pattern for checking user is in the role or not&& ai'nt it better to check it using a single query through the authdb contet ? meaning adding another dbSet for the ApplicationUserRole ;
+
+## what is needed 
+  - signup 
+  - signin
+  - confirm email
+  - compelete info
+  - change password 
+  - reset password
+  - change roles 
+  - resterict access to content 
+  - referesh the access token
+  - phone number and otp || if its possible 
+

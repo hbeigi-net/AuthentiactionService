@@ -9,7 +9,7 @@ public class ApplicationRole : IdentityRole<Guid>, IAuditableEntity
   public string? Description { get; set; }
   public bool IsSystemRole { get; set; }
   public DateTime CreatedAt { get; set; }
-  public required string CreatedBy { get; set; }
+  public string? CreatedBy { get; set; } = "system";
   public DateTime? UpdatedAt { get; set; }
   public string? UpdatedBy { get; set; }
 

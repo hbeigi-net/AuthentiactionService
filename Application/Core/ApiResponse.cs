@@ -9,5 +9,6 @@ public class ApiResponse<T>
 
   public string? ErrorMessage { get; set; }
   public string? StackTrace { get; set; } = null;
+  public Dictionary<string, string[]>? Errors { get; set; } = [];
 
 }

@@ -14,9 +14,18 @@ using Application.Intefaces;
 using Application.Services;
 using Domain.Interfaces;
 using Persistence.Repositories;
+using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Mvc.Authorization;
+using Persistence.Seed;
 
 var builder = WebApplication.CreateBuilder(args);
 
+
+builder.Services.AddControllers(opt => 
+{
+    var policy = new AuthorizationPolicyBuilder().RequireAuthenticatedUser().Build();
+    opt.Filters.Add(new AuthorizeFilter(policy));
+});
 
 builder.Services.AddDbContext<AuthDbContext>(opt =>
 {
@@ -25,6 +34,7 @@ builder.Services.AddDbContext<AuthDbContext>(opt =>
 
 builder.Services.AddIdentity<ApplicationUser, ApplicationRole>()
     .AddEntityFrameworkStores<AuthDbContext>()
+    .AddRoles<ApplicationRole>()
     .AddDefaultTokenProviders();
 
 builder.Services.AddAuthentication(options =>
@@ -81,7 +91,6 @@ builder.Services.AddMediatR(cfg =>
 });
 
 builder.Services.AddAutoMapper(cfg => { },typeof(MappingProfiles));
-builder.Services.AddControllers();
 builder.Services.AddValidators();
 
 // API Versioning
@@ -94,6 +103,7 @@ builder.Services.AddApiVersioning(options =>
 
 var app = builder.Build();
 
+await DbInit.Seed(app.Services);
 app.UseMiddleware<GlobalExceptionHandler>();
 app.UseAuthentication();
 app.UseAuthorization();
