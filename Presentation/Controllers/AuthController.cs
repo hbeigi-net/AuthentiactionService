@@ -1,6 +1,5 @@
 using System;
 using Application.Auth.Commands;
-using Application.Auth.DTOs;
 using Application.Core;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Authorization;
@@ -26,5 +25,12 @@ public class AuthController : BaseController
     return result.ToActionResult();
   }
 
+  [HttpPost("refresh-token")]
+  [AllowAnonymous]
+  public async Task<IActionResult> RefreshToken([FromBody] RefreshTokenCommand.Command command)
+  {
+    var result = await Mediator.Send(command);
+    return result.ToActionResult();
+  }
 
 }

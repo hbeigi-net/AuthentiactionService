@@ -1,5 +1,6 @@
 using Domain.Entities;
 using Domain.Interfaces;
+using Infrastructure.Interfaces;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore.Storage;
 using Persistence.Data;

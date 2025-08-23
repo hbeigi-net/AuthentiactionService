@@ -26,7 +26,7 @@ public class ValidationInteceptor<TRequest, TResponse>(
     }
     
     if(validator == null){
-      return await next(cancellationToken);
+      return await next();
     }
 
     var validationResult = validator.Validate(request);
@@ -35,6 +35,6 @@ public class ValidationInteceptor<TRequest, TResponse>(
       throw new ValidationException(validationResult.Errors);
     }
     
-    return await next(cancellationToken);
+    return await next();
   }
 }

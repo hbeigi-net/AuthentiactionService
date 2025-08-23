@@ -9,53 +9,55 @@ using Persistence.Data;
 using Presentation.Middlewares;
 using Microsoft.IdentityModel.Tokens;
 using System.Text;
-using Application.Auth;
 using Application.Intefaces;
-using Application.Services;
+using Infrastructure.Services;
 using Domain.Interfaces;
 using Persistence.Repositories;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc.Authorization;
 using Persistence.Seed;
+using Infrastructure.Interfaces;
 
 var builder = WebApplication.CreateBuilder(args);
 
-
-builder.Services.AddControllers(opt => 
-{
-    var policy = new AuthorizationPolicyBuilder().RequireAuthenticatedUser().Build();
-    opt.Filters.Add(new AuthorizeFilter(policy));
-});
+builder.Services
+    .AddControllers(opt => 
+    {
+        var policy = new AuthorizationPolicyBuilder().RequireAuthenticatedUser().Build();
+        opt.Filters.Add(new AuthorizeFilter(policy));
+    });
 
 builder.Services.AddDbContext<AuthDbContext>(opt =>
 {
     opt.UseSqlServer(builder.Configuration.GetConnectionString("DefaultConnection"));
 });
 
-builder.Services.AddIdentity<ApplicationUser, ApplicationRole>()
+builder.Services
+    .AddIdentity<ApplicationUser, ApplicationRole>()
     .AddEntityFrameworkStores<AuthDbContext>()
     .AddRoles<ApplicationRole>()
     .AddDefaultTokenProviders();
 
-builder.Services.AddAuthentication(options =>
-{
-    options.DefaultAuthenticateScheme = "Bearer";
-    options.DefaultChallengeScheme = "Bearer";
-})
-.AddJwtBearer("Bearer", options =>
-{
-    options.TokenValidationParameters = new TokenValidationParameters
+builder.Services
+    .AddAuthentication(options =>
     {
-        ValidateIssuerSigningKey = true,
-        IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(builder.Configuration["JwtSettings:SecretKey"]!)),
-        ValidateIssuer = true,
-        ValidIssuer = builder.Configuration["JwtSettings:Issuer"],
-        ValidateAudience = true,
-        ValidAudience = builder.Configuration["JwtSettings:Audience"],
-        ValidateLifetime = true,
-        ClockSkew = TimeSpan.Zero
-    };
-});
+        options.DefaultAuthenticateScheme = "Bearer";
+        options.DefaultChallengeScheme = "Bearer";
+    })
+    .AddJwtBearer("Bearer", options =>
+    {
+        options.TokenValidationParameters = new TokenValidationParameters
+        {
+            ValidateIssuerSigningKey = true,
+            IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(builder.Configuration["JwtSettings:SecretKey"]!)),
+            ValidateIssuer = true,
+            ValidIssuer = builder.Configuration["JwtSettings:Issuer"],
+            ValidateAudience = true,
+            ValidAudience = builder.Configuration["JwtSettings:Audience"],
+            ValidateLifetime = true,
+            ClockSkew = TimeSpan.Zero
+        };
+    });
 
 builder.Services.AddScoped<IUnitOfWork, UnitOfWork>();
 builder.Services.AddScoped<IApplicationUserRepository, ApplicationUserRepository >();
@@ -92,7 +94,6 @@ builder.Services.AddMediatR(cfg =>
 
 builder.Services.AddAutoMapper(cfg => { },typeof(MappingProfiles));
 builder.Services.AddValidators();
-
 // API Versioning
 builder.Services.AddApiVersioning(options =>
 {

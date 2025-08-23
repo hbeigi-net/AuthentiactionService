@@ -1,18 +1,20 @@
 using System;
 using Application.Auth.Commands;
 using Application.Auth.DTOs;
+using Application.Core;
 using FluentResults;
+using MediatR;
 
 namespace Application.Intefaces;
 
 public interface IAuthService
 {
-  Task<Result<SigninResponseDTO>> SignInAsync(SignIn.Command request);
-  Task<Result<SingupResponseDTO>> SignUpAsync(Singup.Command request);
-  //Task<Result<LoginResponse>> RefreshTokenAsync(RefreshTokenRequest request);
-  Task<Result> LogoutAsync(string refreshToken);
-  Task<Result> RevokeAllTokensAsync(Guid userId);
-  Task<Result> ConfirmEmailAsync(string userId, string token);
-  Task<Result> ForgotPasswordAsync(string email);
+  Task<ApplicationResult<SigninResponseDTO>> SignInAsync(SignIn.Command request);
+  Task<ApplicationResult<SingupResponseDTO>> SignUpAsync(Singup.Command request);
+  Task<ApplicationResult<RefreshTokenResponseDto>> RefreshToken(string refreshToken);
+  Task<ApplicationResult<Unit>> LogoutAsync(string refreshToken);
+  Task<ApplicationResult<Unit>> RevokeAllTokensAsync(Guid userId);
+  Task<ApplicationResult<Unit>> ConfirmEmailAsync(string userId, string token);
+  Task<ApplicationResult<Unit>> ForgotPasswordAsync(string email);
   //Task<Result> ResetPasswordAsync(ResetPasswordRequest request);
 }

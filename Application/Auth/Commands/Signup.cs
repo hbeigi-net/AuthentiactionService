@@ -10,7 +10,7 @@ namespace Application.Auth.Commands;
 
 public class Singup
 {
-  public class Command : IRequest<Result<SingupResponseDTO>>
+  public class Command : IRequest<ApplicationResult<SingupResponseDTO>>
   {
     public required string Email { get; set; }
     public required string Password { get; set; }
@@ -18,11 +18,11 @@ public class Singup
 
   public class Handler(
     IAuthService authService
-  ) : IRequestHandler<Command, Result<SingupResponseDTO>>
-  {
+  ) : IRequestHandler<Command, ApplicationResult<SingupResponseDTO>>
+  { 
     private readonly IAuthService _authService = authService;
 
-    public async Task<Result<SingupResponseDTO>> Handle(Command request, CancellationToken cancellationToken)
+    public async Task<ApplicationResult<SingupResponseDTO>> Handle(Command request, CancellationToken cancellationToken)
     {
       return await _authService.SignUpAsync(request);
     }
