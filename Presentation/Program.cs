@@ -59,6 +59,7 @@ builder.Services
         };
     });
 
+builder.Services.AddScoped<ICurrentUserService, CurrentUserService>();
 builder.Services.AddScoped<IUnitOfWork, UnitOfWork>();
 builder.Services.AddScoped<IApplicationUserRepository, ApplicationUserRepository >();
 builder.Services.AddScoped<IRefreshTokenRepository, RefreshTokenRepository>();

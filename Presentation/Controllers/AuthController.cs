@@ -3,6 +3,7 @@ using Application.Auth.Commands;
 using Application.Core;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Authorization;
+using FluentResults;
 
 namespace Presentation.Controllers;
 
@@ -31,6 +32,14 @@ public class AuthController : BaseController
   {
     var result = await Mediator.Send(command);
     return result.ToActionResult();
+  }
+
+  [HttpPost("change-password")]
+  [Authorize]
+  public async Task<IActionResult> ChangePassword([FromBody] ChangePassword.Command command) 
+  {
+     var result = await  Mediator.Send(command);  
+     return result.ToActionResult();
   }
 
 }

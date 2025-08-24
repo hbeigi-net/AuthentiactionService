@@ -11,7 +11,8 @@ public static class ValidatorsExtension
   {
     services.AddScoped<IValidator<Singup.Command>, SignupValidator>();
     services.AddScoped<IValidator<SignIn.Command>, SigninValidator>();
-    // Add other validators here as needed
+    services.AddScoped<IValidator<ChangePassword.Command>, ChangePasswordValidator>();
+
     return services;
   }
 }

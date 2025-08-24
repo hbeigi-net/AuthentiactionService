@@ -16,5 +16,6 @@ public interface IAuthService
   Task<ApplicationResult<Unit>> RevokeAllTokensAsync(Guid userId);
   Task<ApplicationResult<Unit>> ConfirmEmailAsync(string userId, string token);
   Task<ApplicationResult<Unit>> ForgotPasswordAsync(string email);
+  Task<ApplicationResult<bool>> ChangePasswordAsync(ChangePassword.Command request);
   //Task<Result> ResetPasswordAsync(ResetPasswordRequest request);
 }

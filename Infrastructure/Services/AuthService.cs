@@ -24,7 +24,8 @@ public class AuthService(
         ILogger<AuthService> logger,
         IMapper mapper,
         AuthDbContext dbContext,
-        IConfiguration config
+        IConfiguration config, 
+        ICurrentUserService currentUserService
  //IEmailService emailService) : IAuthService
  ) : IAuthService
 {
@@ -34,6 +35,7 @@ public class AuthService(
     private readonly ILogger<AuthService> _logger = logger;
     private readonly AuthDbContext _dbContext = dbContext;
     private readonly IConfiguration _config = config;
+    private readonly ICurrentUserService _currentUserService = currentUserService;
     //private readonly IEmailService _emailService;
 
     public async Task<ApplicationResult<SigninResponseDTO>> SignInAsync(SignIn.Command request)
@@ -288,5 +290,42 @@ public class AuthService(
             AccessToken = accessToken,
             RefreshToken = refreshToken.Token,
         });
+    }
+
+    public async Task<ApplicationResult<bool>> ChangePasswordAsync(ChangePassword.Command request) 
+    {
+        var userId = _currentUserService.GetUserId();
+
+        if(userId is null) {
+            return ApplicationResult<bool>.Fail("User not found", 400);
+        }
+
+        var singinManager =  _unitOfWork.SignInManager;
+        var user = await _unitOfWork.Users.GetByIdAsync(userId.Value);
+
+        if(user is null) {
+            return ApplicationResult<bool>.Fail("User not found", 400);
+        }
+
+        var result = await singinManager.CheckPasswordSignInAsync(user, request.CurrentPassword, lockoutOnFailure: true);
+        
+        if(result.IsLockedOut) {
+            return ApplicationResult<bool>.Fail("Too many requests, please try again later", 429);
+        }
+
+        if(!result.Succeeded) {
+            return ApplicationResult<bool>.Fail("Invalid current password", 400);
+        }
+
+        user.PasswordHash = singinManager.UserManager.PasswordHasher.HashPassword(user, request.NewPassword);
+
+        var updateResult = await singinManager.UserManager.UpdateAsync(user);
+
+        if(!updateResult.Succeeded){
+            return ApplicationResult<bool>.Fail("something went wrong saving changes", 500);
+        }
+        
+        await RevokeAllTokensAsync(user.Id);
+        return ApplicationResult<bool>.Ok(true);
     }
 }
