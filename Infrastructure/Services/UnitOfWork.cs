@@ -15,13 +15,10 @@ public sealed class UnitOfWork(
   private readonly AuthDbContext _context = dbContext;
   private readonly SignInManager<ApplicationUser> _signInManager = signInManager;
   private IDbContextTransaction? _transaction;
-  private readonly  IRefreshTokenRepository? _refreshTokens;
 
-  private readonly IApplicationUserRepository? _users;
+  public IApplicationUserRepository Users => new ApplicationUserRepository(_context, _signInManager.UserManager);
 
-  public IApplicationUserRepository Users => _users ?? new ApplicationUserRepository(_context, _signInManager.UserManager);
-
-  public IRefreshTokenRepository RefreshTokens => _refreshTokens ?? new RefreshTokenRepository(_context);
+  public IRefreshTokenRepository RefreshTokens =>  new RefreshTokenRepository(_context);
 
   public SignInManager<ApplicationUser> SignInManager => _signInManager;
 

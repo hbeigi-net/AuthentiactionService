@@ -13,6 +13,8 @@ using Persistence.Data;
 using Microsoft.EntityFrameworkCore;
 using Application.Core;
 using MediatR;
+using Microsoft.Extensions.Configuration;
+using System.Security.Claims;
 
 namespace Infrastructure.Services;
 
@@ -21,8 +23,9 @@ public class AuthService(
         IJwtTokenService jwtTokenService,
         ILogger<AuthService> logger,
         IMapper mapper,
-        AuthDbContext dbContext
-        //IEmailService emailService) : IAuthService
+        AuthDbContext dbContext,
+        IConfiguration config
+ //IEmailService emailService) : IAuthService
  ) : IAuthService
 {
     private readonly IUnitOfWork _unitOfWork = unitOfWork;
@@ -30,6 +33,7 @@ public class AuthService(
     private readonly IMapper _mapper = mapper;
     private readonly ILogger<AuthService> _logger = logger;
     private readonly AuthDbContext _dbContext = dbContext;
+    private readonly IConfiguration _config = config;
     //private readonly IEmailService _emailService;
 
     public async Task<ApplicationResult<SigninResponseDTO>> SignInAsync(SignIn.Command request)
@@ -67,11 +71,11 @@ public class AuthService(
 
             // Update last login
             user.UpdateLastLogin();
-            await signInManager.UserManager.UpdateAsync(user);   
+            await signInManager.UserManager.UpdateAsync(user);
 
             // Generate tokens
             var accessToken = await _jwtTokenService.GenerateAccessTokenAsync(user);
-            var refreshToken = _jwtTokenService.GenerateRefreshToken();
+            var refreshToken = _jwtTokenService.GenerateRefreshToken(user);
 
             // Save refresh token
             var refreshTokenEntity = new RefreshToken
@@ -229,7 +233,7 @@ public class AuthService(
             }
 
             var token = await userManager.GeneratePasswordResetTokenAsync(user);
-            
+
             // Send password reset email
             //await _emailService.SendPasswordResetAsync(user.Email, user.FullName, user.Id.ToString(), token);
 
@@ -243,13 +247,46 @@ public class AuthService(
         }
     }
 
-  public async Task<ApplicationResult<RefreshTokenResponseDto>>? RefreshToken(string refreshToken)
-  {
-    var refreshTokenEntity = await _dbContext.RefreshTokens.FirstOrDefaultAsync(x => x.Token == refreshToken);
+    public async Task<ApplicationResult<RefreshTokenResponseDto>> RefreshToken(string token)
+    {
 
-    if(refreshTokenEntity == null) {
-        return ApplicationResult<RefreshTokenResponseDto>.Fail("Invalid refresh token", 401);
+        var refreshToken = await _unitOfWork.RefreshTokens.GetByTokenAsync(token);
+
+        if (refreshToken is null)
+        {
+            return ApplicationResult<RefreshTokenResponseDto>.Fail("Invalid refresh refreshToken");
+        }
+
+        if (refreshToken.IsRevoked || refreshToken.IsExpired)
+        {
+            return ApplicationResult<RefreshTokenResponseDto>.Fail("refreshToken is revoked or expired");
+        }
+
+        var claims = _jwtTokenService.ValidateToken(token, _config["JwtSettings:RefreshTokenSecretKey"]!);
+
+        if (claims is null)
+        {
+            return ApplicationResult<RefreshTokenResponseDto>.Fail("Invalid Token");
+        }
+
+        var userId = claims.Claims.FirstOrDefault(cl => cl.Type == ClaimTypes.NameIdentifier)?.Value;
+
+        if (userId is null)
+        {
+            return ApplicationResult<RefreshTokenResponseDto>.Fail("User not found");
+        }
+
+        var user = await _unitOfWork.Users.GetByIdAsync(Guid.Parse(userId));
+        if (user is null)
+        {
+            return ApplicationResult<RefreshTokenResponseDto>.Fail("Invalid refreshToken. Please login again");
+        }
+
+        var accessToken = await _jwtTokenService.GenerateAccessTokenAsync(user);
+        return ApplicationResult<RefreshTokenResponseDto>.Ok(new()
+        {
+            AccessToken = accessToken,
+            RefreshToken = refreshToken.Token,
+        });
     }
-    return null;
-  }
 }

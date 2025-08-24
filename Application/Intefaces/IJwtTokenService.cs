@@ -7,7 +7,6 @@ namespace Application.Intefaces;
 public interface IJwtTokenService
 {
     Task<string> GenerateAccessTokenAsync(ApplicationUser user);
-    string GenerateRefreshToken();
-    ClaimsPrincipal ValidateToken(string token);
-}
-
+    string GenerateRefreshToken(ApplicationUser user);
+    ClaimsPrincipal? ValidateToken(string token, string secretKey);
+} 
