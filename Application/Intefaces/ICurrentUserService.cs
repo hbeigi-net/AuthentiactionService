@@ -9,4 +9,5 @@ public interface ICurrentUserService
   Task<bool> IsInRoleAsync(string[] roles);
 
   Guid? GetUserId();
+  Task<long?> GetLastPasswordUpdateDateAsync();
 }

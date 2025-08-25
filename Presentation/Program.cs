@@ -17,6 +17,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc.Authorization;
 using Persistence.Seed;
 using Infrastructure.Interfaces;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -38,6 +39,7 @@ builder.Services
     .AddRoles<ApplicationRole>()
     .AddDefaultTokenProviders();
 
+builder.Services.AddScoped<TokenValidator>();
 builder.Services
     .AddAuthentication(options =>
     {
@@ -57,6 +59,19 @@ builder.Services
             ValidateLifetime = true,
             ClockSkew = TimeSpan.Zero
         };
+
+        options.Events = new JwtBearerEvents(){
+            OnTokenValidated = async (context) =>
+            {
+                var claimsPrincipal = context.Principal;
+                var validator = context.HttpContext.RequestServices.GetRequiredService<TokenValidator>();
+
+                if (claimsPrincipal is null || !await validator.ValidateAsync(claimsPrincipal))
+                {
+                    context.Fail("Invalid Token");
+                }
+            }
+        };
     });
 
 builder.Services.AddScoped<ICurrentUserService, CurrentUserService>();
@@ -69,7 +84,6 @@ builder.Services.AddScoped<IAuthService, AuthService>();
 
 builder.Services.Configure<IdentityOptions>(options =>
 {
-    // Password settings
     options.Password.RequireDigit = true;
     options.Password.RequireLowercase = true;
     options.Password.RequireNonAlphanumeric = true;
@@ -77,12 +91,10 @@ builder.Services.Configure<IdentityOptions>(options =>
     options.Password.RequiredLength = 8;
     options.Password.RequiredUniqueChars = 1;
 
-    // Lockout settings
     options.Lockout.DefaultLockoutTimeSpan = TimeSpan.FromMinutes(5);
     options.Lockout.MaxFailedAccessAttempts = 5;
     options.Lockout.AllowedForNewUsers = true;
 
-    // User settings
     options.User.AllowedUserNameCharacters = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-._@+";
     options.User.RequireUniqueEmail = true;
 });
@@ -95,12 +107,11 @@ builder.Services.AddMediatR(cfg =>
 
 builder.Services.AddAutoMapper(cfg => { },typeof(MappingProfiles));
 builder.Services.AddValidators();
-// API Versioning
 builder.Services.AddApiVersioning(options =>
 {
     options.DefaultApiVersion = new ApiVersion(1, 0);
     options.AssumeDefaultVersionWhenUnspecified = true;
-    options.ReportApiVersions = true;  // Header info for clients to see the supported versions
+    options.ReportApiVersions = true;
 });
 
 var app = builder.Build();

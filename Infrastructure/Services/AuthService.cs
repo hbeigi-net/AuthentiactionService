@@ -318,7 +318,7 @@ public class AuthService(
         }
 
         user.PasswordHash = singinManager.UserManager.PasswordHasher.HashPassword(user, request.NewPassword);
-
+        user.PasswordUpdatedAt = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
         var updateResult = await singinManager.UserManager.UpdateAsync(user);
 
         if(!updateResult.Succeeded){

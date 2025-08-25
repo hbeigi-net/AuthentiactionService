@@ -33,6 +33,7 @@ public class JwtTokenService(
       new (ClaimTypes.Email, user.Email ?? ""),
       new ("FirstName", user.FirstName ?? ""),
       new ("LastName", user.LastName ?? ""),
+      new ("IssuedAt", DateTimeOffset.UtcNow.ToUnixTimeSeconds().ToString()),
     };
 
     foreach (var role in roles)
@@ -50,8 +51,9 @@ public class JwtTokenService(
 
   public string GenerateRefreshToken(ApplicationUser user)
   {
-    List<Claim> claims = new () {
+    List<Claim> claims = new() {
       new (ClaimTypes.NameIdentifier, user.Id.ToString()),
+      new ("IssuedAt", DateTimeOffset.UtcNow.ToUnixTimeSeconds().ToString()),
     };
     var expirationMinutes = int.Parse(_config["JwtSettings:RefreshTokenSecretKeyExpirationMinutes"]!);
     var secretKey = _config["JwtSettings:RefreshTokenSecretKey"]!;

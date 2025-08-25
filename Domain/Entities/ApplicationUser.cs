@@ -17,6 +17,7 @@ public class ApplicationUser : IdentityUser<Guid>, IAuditableEntity
   public string? CreatedBy { get; set; } = "user";
   public DateTime? UpdatedAt { get; set; }
   public string? UpdatedBy { get; set; }
+  public long PasswordUpdatedAt { get; set; }
 
   // Navigation properties 
   public virtual ICollection<ApplicationUserRole> UserRoles { get; set; } = new List<ApplicationUserRole>();
