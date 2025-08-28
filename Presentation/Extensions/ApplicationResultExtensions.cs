@@ -1,8 +1,8 @@
-using System;
-using FluentResults;
 using Microsoft.AspNetCore.Mvc;
+using Presentation.Models;
+using Application.Core;
 
-namespace Application.Core;
+namespace Presentation.Extensions;
 
 public static class ResultExtensions
 {

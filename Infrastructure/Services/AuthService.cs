@@ -11,6 +11,7 @@ using MediatR;
 using Microsoft.Extensions.Configuration;
 using System.Security.Claims;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Options;
 
 namespace Infrastructure.Services;
 
@@ -21,10 +22,12 @@ public class AuthService(
         IMapper mapper,
         AuthDbContext dbContext,
         IConfiguration config,
-        ICurrentUserService currentUserService
+        ICurrentUserService currentUserService,
+        IOptions<JwtSettings> jwtSettings
  //IEmailService emailService) : IAuthService
  ) : IAuthService
 {
+    private readonly JwtSettings _jwtSettings = jwtSettings.Value;
     private readonly IUnitOfWork _unitOfWork = unitOfWork;
     private readonly IJwtTokenService _jwtTokenService = jwtTokenService;
     private readonly IMapper _mapper = mapper;
@@ -163,7 +166,7 @@ public class AuthService(
 
     public async Task<ApplicationResult<bool>> LogoutAsync(string refreshToken, CancellationToken cancellationToken)
     {
-        var tokeClaims = _jwtTokenService.ValidateToken(refreshToken, _config["JwtSettings:RefreshTokenSecretKey"]!);
+        var tokeClaims = _jwtTokenService.ValidateToken(refreshToken, _jwtSettings.RefreshTokenSecretKey);
         if (tokeClaims is null)
         {
             return ApplicationResult<bool>.Fail("Invalid refresh token");
@@ -269,7 +272,7 @@ public class AuthService(
             return ApplicationResult<RefreshTokenResponseDto>.Fail("refreshToken is revoked or expired");
         }
 
-        var claims = _jwtTokenService.ValidateToken(token, _config["JwtSettings:RefreshTokenSecretKey"]!);
+        var claims = _jwtTokenService.ValidateToken(token, _jwtSettings.RefreshTokenSecretKey);
 
         if (claims is null)
         {

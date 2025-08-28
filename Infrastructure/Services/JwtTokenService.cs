@@ -4,10 +4,12 @@ using System.Security.Claims;
 using System.Security.Cryptography;
 using System.Text;
 using System.Threading.Tasks;
+using Application.Core;
 using Application.Intefaces;
 using Domain.Entities;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.JsonWebTokens;
 using Microsoft.IdentityModel.Tokens;
 
@@ -15,9 +17,11 @@ namespace Infrastructure.Services;
 
 public class JwtTokenService(
   IConfiguration config,
-  UserManager<ApplicationUser> userManager
+  UserManager<ApplicationUser> userManager,
+  IOptions<JwtSettings> jwtSettings
 ) : IJwtTokenService
 {
+  private readonly JwtSettings _jwtSettings = jwtSettings.Value;
   private readonly IConfiguration _config = config;
   private readonly UserManager<ApplicationUser> _userManager = userManager;
 
@@ -41,8 +45,8 @@ public class JwtTokenService(
       claims.Add(new(ClaimTypes.Role, role));
     }
 
-    var secretKey = _config["JwtSettings:SecretKey"]!;
-    var expirationMinutes = int.Parse(_config["JwtSettings:AccessTokenExpirationMinutes"]!);
+    var secretKey = _jwtSettings.SecretKey;
+    var expirationMinutes = _jwtSettings.AccessTokenExpirationMinutes;
 
     var token = _signToken(secretKey, claims, expirationMinutes);
 
@@ -55,8 +59,8 @@ public class JwtTokenService(
       new (ClaimTypes.NameIdentifier, user.Id.ToString()),
       new ("IssuedAt", DateTimeOffset.UtcNow.ToUnixTimeSeconds().ToString()),
     };
-    var expirationMinutes = int.Parse(_config["JwtSettings:RefreshTokenSecretKeyExpirationMinutes"]!);
-    var secretKey = _config["JwtSettings:RefreshTokenSecretKey"]!;
+    var expirationMinutes = _jwtSettings.RefreshTokenSecretKeyExpirationMinutes;
+    var secretKey = _jwtSettings.RefreshTokenSecretKey;
 
     var token = _signToken(secretKey, claims, expirationMinutes);
 
@@ -73,8 +77,8 @@ public class JwtTokenService(
     var credentials = new SigningCredentials(key, SecurityAlgorithms.HmacSha256);
 
     var token = new JwtSecurityToken(
-      issuer: _config["JwtSettings:Issuer"],
-      audience: _config["JwtSettings:Audience"],
+      issuer: _jwtSettings.Issuer,
+      audience: _jwtSettings.Audience,
       claims: claims,
       expires: DateTime.UtcNow.AddMinutes(expirationMinutes),
       signingCredentials: credentials
@@ -96,8 +100,8 @@ public class JwtTokenService(
       ValidateAudience = true,
       ValidateLifetime = true,
       ValidateIssuerSigningKey = true,
-      ValidIssuer = _config["JwtSettings:Issuer"],
-      ValidAudience = _config["JwtSettings:Audience"],
+      ValidIssuer = _jwtSettings.Issuer,
+      ValidAudience = _jwtSettings.Audience,
       IssuerSigningKey = new SymmetricSecurityKey(key),
       ClockSkew = TimeSpan.Zero
     };

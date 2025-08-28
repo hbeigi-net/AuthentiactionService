@@ -1,6 +1,4 @@
-using System;
-
-namespace Application.Core;
+namespace Presentation.Models;
 
 public class ApiResponse<T>
 {

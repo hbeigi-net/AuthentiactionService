@@ -1,7 +1,6 @@
 using System;
-using FluentResults;
-using Application.Core;
 using FluentValidation;
+using Presentation.Models;
 namespace Presentation.Middlewares;
 
 internal sealed class GlobalExceptionHandler(
