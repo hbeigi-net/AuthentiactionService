@@ -1,20 +1,16 @@
-using System;
 using Application.Auth.Commands;
 using Application.Auth.DTOs;
 using Application.Intefaces;
 using Domain.Entities;
-using Domain.Interfaces;
-using FluentResults;
-using Microsoft.AspNetCore.Identity;
 using Microsoft.Extensions.Logging;
 using AutoMapper;
 using Infrastructure.Interfaces;
 using Persistence.Data;
-using Microsoft.EntityFrameworkCore;
 using Application.Core;
 using MediatR;
 using Microsoft.Extensions.Configuration;
 using System.Security.Claims;
+using Microsoft.EntityFrameworkCore;
 
 namespace Infrastructure.Services;
 
@@ -24,7 +20,7 @@ public class AuthService(
         ILogger<AuthService> logger,
         IMapper mapper,
         AuthDbContext dbContext,
-        IConfiguration config, 
+        IConfiguration config,
         ICurrentUserService currentUserService
  //IEmailService emailService) : IAuthService
  ) : IAuthService
@@ -165,34 +161,43 @@ public class AuthService(
         }
     }
 
-    public async Task<ApplicationResult<Unit>> LogoutAsync(string refreshToken)
+    public async Task<ApplicationResult<bool>> LogoutAsync(string refreshToken, CancellationToken cancellationToken)
     {
-        try
+        var tokeClaims = _jwtTokenService.ValidateToken(refreshToken, _config["JwtSettings:RefreshTokenSecretKey"]!);
+        if (tokeClaims is null)
         {
-            await _unitOfWork.RefreshTokens.RevokeAsync(refreshToken, "UserLogout");
-            await _unitOfWork.SaveChangesAsync();
-            return ApplicationResult<Unit>.Ok(Unit.Value);
+            return ApplicationResult<bool>.Fail("Invalid refresh token");
         }
-        catch (Exception ex)
+
+        var token = await _dbContext.RefreshTokens.FirstOrDefaultAsync(rt => rt.Token == refreshToken, cancellationToken);
+        if (token is null)
         {
-            _logger.LogError(ex, "Error during logout");
-            return ApplicationResult<Unit>.Fail("An error occurred during logout");
+            return ApplicationResult<bool>.Fail("Invalid refresh token");
         }
+
+        token.Revoke("UserLogout");
+        await _dbContext.SaveChangesAsync(cancellationToken);
+
+        return ApplicationResult<bool>.Ok(true);
     }
 
-    public async Task<ApplicationResult<Unit>> RevokeAllTokensAsync(Guid userId)
+    public async Task<ApplicationResult<bool>> RevokeAllTokensAsync(string userId, CancellationToken cancellationToken)
     {
-        try
+        var id = Guid.Parse(userId);
+        var refereshTokens = await _dbContext.RefreshTokens
+            .Where(rt => rt.UserId == id )
+            .ToListAsync(cancellationToken);
+
+        if(refereshTokens is null) return ApplicationResult<bool>.Fail("No refresh tokens found");
+
+        foreach (var token in refereshTokens)
         {
-            await _unitOfWork.RefreshTokens.RevokeAllUserTokensAsync(userId, "SystemRevoke");
-            await _unitOfWork.SaveChangesAsync();
-            return ApplicationResult<Unit>.Ok(Unit.Value);
+            token.Revoke("UserLogout");
         }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Error revoking tokens for user: {UserId}", userId);
-            return ApplicationResult<Unit>.Fail("An error occurred while revoking tokens");
-        }
+
+        await _dbContext.SaveChangesAsync(cancellationToken);
+
+        return ApplicationResult<bool>.Ok(true);
     }
 
     public async Task<ApplicationResult<Unit>> ConfirmEmailAsync(string userId, string token)
@@ -292,28 +297,32 @@ public class AuthService(
         });
     }
 
-    public async Task<ApplicationResult<bool>> ChangePasswordAsync(ChangePassword.Command request) 
+    public async Task<ApplicationResult<bool>> ChangePasswordAsync(ChangePassword.Command request, CancellationToken cancellationToken)
     {
         var userId = _currentUserService.GetUserId();
 
-        if(userId is null) {
+        if (userId is null)
+        {
             return ApplicationResult<bool>.Fail("User not found", 400);
         }
 
-        var singinManager =  _unitOfWork.SignInManager;
+        var singinManager = _unitOfWork.SignInManager;
         var user = await _unitOfWork.Users.GetByIdAsync(userId.Value);
 
-        if(user is null) {
+        if (user is null)
+        {
             return ApplicationResult<bool>.Fail("User not found", 400);
         }
 
         var result = await singinManager.CheckPasswordSignInAsync(user, request.CurrentPassword, lockoutOnFailure: true);
-        
-        if(result.IsLockedOut) {
+
+        if (result.IsLockedOut)
+        {
             return ApplicationResult<bool>.Fail("Too many requests, please try again later", 429);
         }
 
-        if(!result.Succeeded) {
+        if (!result.Succeeded)
+        {
             return ApplicationResult<bool>.Fail("Invalid current password", 400);
         }
 
@@ -321,11 +330,12 @@ public class AuthService(
         user.PasswordUpdatedAt = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
         var updateResult = await singinManager.UserManager.UpdateAsync(user);
 
-        if(!updateResult.Succeeded){
+        if (!updateResult.Succeeded)
+        {
             return ApplicationResult<bool>.Fail("something went wrong saving changes", 500);
         }
-        
-        await RevokeAllTokensAsync(user.Id);
+
+        await RevokeAllTokensAsync(user.Id.ToString(), cancellationToken);
         return ApplicationResult<bool>.Ok(true);
     }
 }

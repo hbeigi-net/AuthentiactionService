@@ -35,11 +35,16 @@ public class AuthController : BaseController
   }
 
   [HttpPost("change-password")]
-  [Authorize]
   public async Task<IActionResult> ChangePassword([FromBody] ChangePassword.Command command) 
   {
      var result = await  Mediator.Send(command);  
      return result.ToActionResult();
   }
 
+  [HttpPost("logout")] 
+  public async Task<IActionResult> Logout([FromBody] Logout.Command command)
+  {
+    var result = await Mediator.Send(command);
+    return result.ToActionResult();
+  }
 }

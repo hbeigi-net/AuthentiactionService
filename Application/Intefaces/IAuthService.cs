@@ -12,10 +12,10 @@ public interface IAuthService
   Task<ApplicationResult<SigninResponseDTO>> SignInAsync(SignIn.Command request);
   Task<ApplicationResult<SingupResponseDTO>> SignUpAsync(Singup.Command request);
   Task<ApplicationResult<RefreshTokenResponseDto>> RefreshToken(string refreshToken);
-  Task<ApplicationResult<Unit>> LogoutAsync(string refreshToken);
-  Task<ApplicationResult<Unit>> RevokeAllTokensAsync(Guid userId);
+  Task<ApplicationResult<bool>> LogoutAsync(string refreshToken, CancellationToken cancellationToken);
+  Task<ApplicationResult<bool>> RevokeAllTokensAsync(string userId, CancellationToken cancellationToken);
   Task<ApplicationResult<Unit>> ConfirmEmailAsync(string userId, string token);
   Task<ApplicationResult<Unit>> ForgotPasswordAsync(string email);
-  Task<ApplicationResult<bool>> ChangePasswordAsync(ChangePassword.Command request);
+  Task<ApplicationResult<bool>> ChangePasswordAsync(ChangePassword.Command request, CancellationToken cancellationToken);
   //Task<Result> ResetPasswordAsync(ResetPasswordRequest request);
 }
