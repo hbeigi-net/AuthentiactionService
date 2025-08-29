@@ -3,7 +3,7 @@ using Domain.Entities;
 using Domain.Interfaces;
 using Microsoft.AspNetCore.Identity;
 
-namespace Infrastructure.Interfaces;
+namespace Application.Interfaces;
 
 public interface IUnitOfWork : IAsyncDisposable
 {

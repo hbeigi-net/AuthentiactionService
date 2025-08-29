@@ -21,6 +21,10 @@ public static class ResultExtensions
   {
     if (result.IsSuccess)
     {
+      if(result.StatusCode == 302) {
+        return new RedirectResult(result.RedirectUrl!, true);
+      }
+      
       return new OkObjectResult(result.ToApiResponse());
     }
 

@@ -44,4 +44,20 @@ public class AuthController : BaseController
     var result = await Mediator.Send(command);
     return result.ToActionResult();
   }
+
+  [HttpGet("verify-email")]
+  [AllowAnonymous]
+  public async Task<IActionResult> VerifyEmail([FromQuery] string email, [FromQuery] string token)
+  {
+    var result = await Mediator.Send(new VerifyEmail.Command(email, token));
+    return result.ToActionResult();
+  }
+
+  [HttpPost("resend-verification-email")]
+  [AllowAnonymous]
+  public async Task<IActionResult> ResendVerificationEmail([FromBody] ResendVerificationEmail.Command command)
+  {
+    var result = await Mediator.Send(command);
+    return result.ToActionResult();
+  }
 }

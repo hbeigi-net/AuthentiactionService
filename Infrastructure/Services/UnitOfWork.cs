@@ -1,11 +1,12 @@
 using Domain.Entities;
 using Domain.Interfaces;
-using Infrastructure.Interfaces;
+using Application.Interfaces;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore.Storage;
 using Persistence.Data;
+using Persistence.Repositories;
 
-namespace Persistence.Repositories;
+namespace Infrastructure.Services;
 
 public sealed class UnitOfWork(
     AuthDbContext dbContext,

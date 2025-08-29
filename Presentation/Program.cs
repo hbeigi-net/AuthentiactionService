@@ -16,11 +16,11 @@ using Persistence.Repositories;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc.Authorization;
 using Persistence.Seed;
-using Infrastructure.Interfaces;
+using Application.Interfaces;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
-using Presentation.Extensions;
 
 var builder = WebApplication.CreateBuilder(args);
+
 builder.Services.Configure<JwtSettings>(builder.Configuration.GetSection("JwtSettings"));
 builder.Services.Configure<EmailSettings>(builder.Configuration.GetSection("EmailSettings"));
 
@@ -112,7 +112,7 @@ builder.Services.AddScoped<IRefreshTokenRepository, RefreshTokenRepository>();
 builder.Services.AddScoped<IRefreshTokenRepository, RefreshTokenRepository>();
 builder.Services.AddScoped<IJwtTokenService, JwtTokenService>();
 builder.Services.AddScoped<IAuthService, AuthService>();
-
+builder.Services.AddTransient<IEmailService, EmailService>();
 
 var app = builder.Build();
 

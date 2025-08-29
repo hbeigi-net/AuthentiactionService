@@ -4,7 +4,7 @@ using Application.Intefaces;
 using Domain.Entities;
 using Microsoft.Extensions.Logging;
 using AutoMapper;
-using Infrastructure.Interfaces;
+using Application.Interfaces;
 using Persistence.Data;
 using Application.Core;
 using MediatR;
@@ -12,6 +12,10 @@ using Microsoft.Extensions.Configuration;
 using System.Security.Claims;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
+using Application.Core.Models;
+using System.Text;
+using System.Buffers.Text;
+using Microsoft.AspNetCore.WebUtilities;
 
 namespace Infrastructure.Services;
 
@@ -23,8 +27,8 @@ public class AuthService(
         AuthDbContext dbContext,
         IConfiguration config,
         ICurrentUserService currentUserService,
-        IOptions<JwtSettings> jwtSettings
- //IEmailService emailService) : IAuthService
+        IOptions<JwtSettings> jwtSettings,
+        IEmailService emailService
  ) : IAuthService
 {
     private readonly JwtSettings _jwtSettings = jwtSettings.Value;
@@ -35,7 +39,7 @@ public class AuthService(
     private readonly AuthDbContext _dbContext = dbContext;
     private readonly IConfiguration _config = config;
     private readonly ICurrentUserService _currentUserService = currentUserService;
-    //private readonly IEmailService _emailService;
+    private readonly IEmailService _emailService = emailService;
 
     public async Task<ApplicationResult<SigninResponseDTO>> SignInAsync(SignIn.Command request)
     {
@@ -48,6 +52,11 @@ public class AuthService(
             {
                 _logger.LogWarning("Login attempt with non-existent email: {Email}", request.Email);
                 return ApplicationResult<SigninResponseDTO>.Fail("Invalid Creadentials");
+            }
+            
+            if(!user.EmailConfirmed) {
+                _logger.LogWarning("Login attempt with unconfirmed email: {Email}", request.Email);
+                return ApplicationResult<SigninResponseDTO>.Fail("Email not confirmed, Please Verify your email");
             }
 
             if (!user.IsActive)
@@ -113,7 +122,6 @@ public class AuthService(
     {
         try
         {
-            // Check if email already exists
             var isEmailTaken = await _unitOfWork.Users.IsEmailTakenAsync(request.Email);
             if (isEmailTaken)
                 return ApplicationResult<SingupResponseDTO>.Fail("Email is already taken");
@@ -122,14 +130,15 @@ public class AuthService(
 
             var userManager = _unitOfWork.SignInManager.UserManager;
             var signInManager = _unitOfWork.SignInManager;
-            // Create new user
+            
+
             Guid userId = Guid.NewGuid();
             var user = new ApplicationUser
             {
                 Id = userId,
                 UserName = request.Email,
                 Email = request.Email,
-                EmailConfirmed = false, // Require email confirmation
+                EmailConfirmed = false,
                 CreatedAt = DateTime.UtcNow,
                 CreatedBy = userId.ToString(),
             };
@@ -142,17 +151,17 @@ public class AuthService(
                 return ApplicationResult<SingupResponseDTO>.Fail(errors);
             }
 
-            // Assign default role
-            //await userManager.AddToRoleAsync(user, "User");
+            var emailVerificationToken = await userManager.GenerateEmailConfirmationTokenAsync(user);
+            
+            bool isEmailSent = await SendVerificationEmailAsync(user.Email!, emailVerificationToken);
 
-            // Generate email confirmation token
-            var emailToken = await userManager.GenerateEmailConfirmationTokenAsync(user);
-
-            // Send confirmation email
-            //await _emailService.SendEmailConfirmationAsync(user.Email, user.FullName, user.Id.ToString(), emailToken);
+            if (!isEmailSent)
+            {
+                await _unitOfWork.RollbackTransactionAsync();
+                return ApplicationResult<SingupResponseDTO>.Fail("Failed to send verification email", 500);
+            }
 
             await _unitOfWork.CommitTransactionAsync();
-
             _logger.LogInformation("User {UserId} registered successfully", user.Id);
             return ApplicationResult<SingupResponseDTO>.Ok(new SingupResponseDTO());
         }
@@ -203,29 +212,31 @@ public class AuthService(
         return ApplicationResult<bool>.Ok(true);
     }
 
-    public async Task<ApplicationResult<Unit>> ConfirmEmailAsync(string userId, string token)
+    public async Task<ApplicationResult<bool>> ConfirmEmailAsync(string email, string token)
     {
         try
         {
             var userManager = _unitOfWork.SignInManager.UserManager;
-            var user = await userManager.FindByIdAsync(userId);
+            var user = await userManager.FindByEmailAsync(email);
             if (user == null)
-                return ApplicationResult<Unit>.Fail("User not found");
-
-            var result = await userManager.ConfirmEmailAsync(user, token);
+            {
+                return ApplicationResult<bool>.Fail("User not found");
+            }
+            var decodedToken = Encoding.UTF8.GetString(WebEncoders.Base64UrlDecode(token));
+            var result = await userManager.ConfirmEmailAsync(user, decodedToken);
             if (!result.Succeeded)
             {
                 var errors = string.Join(", ", result.Errors.Select(e => e.Description));
-                return ApplicationResult<Unit>.Fail(errors);
+                return ApplicationResult<bool>.Fail(errors);
             }
 
-            _logger.LogInformation("Email confirmed for user: {UserId}", userId);
-            return ApplicationResult<Unit>.Ok(Unit.Value);
+            _logger.LogInformation("Email confirmed for user: {UserId}", user.Id);
+            return ApplicationResult<bool>.Redirect($"{_config["ClientOptions:ClientLoginUrl"]}");
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error confirming email for user: {UserId}", userId);
-            return ApplicationResult<Unit>.Fail("An error occurred while confirming email");
+            _logger.LogError(ex, "Error confirming email for user: {Email}", email);
+            return ApplicationResult<bool>.Fail("An error occurred while confirming email");
         }
     }
 
@@ -340,5 +351,222 @@ public class AuthService(
 
         await RevokeAllTokensAsync(user.Id.ToString(), cancellationToken);
         return ApplicationResult<bool>.Ok(true);
+    }
+
+    public async Task<ApplicationResult<bool>> ResendVerificationEmailAsync(string email)
+    {
+        var userManager = _unitOfWork.SignInManager.UserManager;
+        var user = await userManager.FindByEmailAsync(email);
+        if (user is null)
+        {
+            return ApplicationResult<bool>.Fail("User not found");
+        }
+        var verificationToken = await userManager.GenerateEmailConfirmationTokenAsync(user);
+        verificationToken = WebEncoders.Base64UrlEncode(Encoding.UTF8.GetBytes(verificationToken));
+        if(user.EmailConfirmed)
+        {
+            return ApplicationResult<bool>.Fail("Email already confirmed");
+        }
+
+        if(!user.IsActive)
+        {
+            return ApplicationResult<bool>.Fail("User is not active");
+        }
+
+        var emailVerificationToken = await userManager.GenerateEmailConfirmationTokenAsync(user);
+        bool isEmailSent = await SendVerificationEmailAsync(user.Email!, emailVerificationToken);
+
+        if (!isEmailSent)
+        {
+            return ApplicationResult<bool>.Fail("Failed to send verification email", 500);
+        }
+
+        return ApplicationResult<bool>.Ok(true);
+
+    }
+
+    private async Task<bool> SendVerificationEmailAsync(string email, string token)
+    {
+        var verificationToken = WebEncoders.Base64UrlEncode(Encoding.UTF8.GetBytes(token));
+        var verificationLink = $"{_config["ClientOptions:ClientUrl"]}{_config["VerificationPath"]}?email={email}&token={verificationToken}";
+        
+        return await _emailService.SendEmailAsync(new EmailMessage{
+                To = email,
+                Subject = "Welcome to our app",
+                Body = $$"""
+                <!DOCTYPE html>
+                <html lang="en">
+                <head>
+                    <meta charset="UTF-8">
+                    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+                    <title>Email Verification</title>
+                    <style>
+                        * {
+                            margin: 0;
+                            padding: 0;
+                            box-sizing: border-box;
+                        }
+                        
+                        body {
+                            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+                            line-height: 1.6;
+                            color: #333;
+                            background-color: #f4f4f4;
+                        }
+                        
+                        .email-container {
+                            max-width: 600px;
+                            margin: 0 auto;
+                            background-color: #ffffff;
+                            border-radius: 8px;
+                            overflow: hidden;
+                            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+                        }
+                        
+                        .header {
+                            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                            color: white;
+                            padding: 30px 20px;
+                            text-align: center;
+                        }
+                        
+                        .header h1 {
+                            font-size: 28px;
+                            font-weight: 600;
+                            margin-bottom: 10px;
+                        }
+                        
+                        .header p {
+                            font-size: 16px;
+                            opacity: 0.9;
+                        }
+                        
+                        .content {
+                            padding: 40px 30px;
+                        }
+                        
+                        .welcome-text {
+                            font-size: 18px;
+                            color: #2c3e50;
+                            margin-bottom: 25px;
+                            text-align: center;
+                        }
+                        
+                        .verification-button {
+                            display: inline-block;
+                            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                            color: white;
+                            text-decoration: none;
+                            padding: 15px 30px;
+                            border-radius: 25px;
+                            font-weight: 600;
+                            font-size: 16px;
+                            margin: 20px 0;
+                            text-align: center;
+                            transition: all 0.3s ease;
+                            box-shadow: 0 4px 15px rgba(102, 126, 234, 0.4);
+                        }
+                        
+                        .verification-button:hover {
+                            transform: translateY(-2px);
+                            box-shadow: 0 6px 20px rgba(102, 126, 234, 0.6);
+                        }
+                        
+                        .info-text {
+                            background-color: #f8f9fa;
+                            border-left: 4px solid #667eea;
+                            padding: 15px;
+                            margin: 20px 0;
+                            border-radius: 0 4px 4px 0;
+                        }
+                        
+                        .footer {
+                            background-color: #f8f9fa;
+                            padding: 20px 30px;
+                            text-align: center;
+                            border-top: 1px solid #e9ecef;
+                        }
+                        
+                        .footer p {
+                            color: #6c757d;
+                            font-size: 14px;
+                            margin-bottom: 10px;
+                        }
+                        
+                        .security-note {
+                            background-color: #fff3cd;
+                            border: 1px solid #ffeaa7;
+                            border-radius: 4px;
+                            padding: 15px;
+                            margin: 20px 0;
+                            color: #856404;
+                        }
+                        
+                        @media only screen and (max-width: 600px) {
+                            .email-container {
+                                margin: 10px;
+                                border-radius: 4px;
+                            }
+                            
+                            .header {
+                                padding: 20px 15px;
+                            }
+                            
+                            .header h1 {
+                                font-size: 24px;
+                            }
+                            
+                            .content {
+                                padding: 25px 20px;
+                            }
+                            
+                            .verification-button {
+                                padding: 12px 25px;
+                                font-size: 14px;
+                            }
+                        }
+                    </style>
+                </head>
+                <body>
+                    <div class="email-container">
+                        <div class="header">
+                            <h1>🎉 Welcome!</h1>
+                            <p>Thank you for joining our community</p>
+                        </div>
+                        
+                        <div class="content">
+                            <div class="welcome-text">
+                                <p>Hi there! 👋</p>
+                                <p>We're excited to have you on board. To get started, please verify your email address by clicking the button below.</p>
+                            </div>
+                            
+                            <div style="text-align: center;">
+                                <a href="{{verificationLink}}" class="verification-button">
+                                    ✅ Verify Email Address
+                                </a>
+                            </div>
+                            
+                            <div class="info-text">
+                                <strong>What happens next?</strong><br>
+                                After verifying your email, you'll have full access to all our features and services.
+                            </div>
+                            
+                            <div class="security-note">
+                                <strong>🔒 Security Note:</strong> If you didn't create an account with us, please ignore this email. Your account security is important to us.
+                            </div>
+                        </div>
+                        
+                        <div class="footer">
+                            <p>This email was sent to you because you signed up for our service.</p>
+                            <p>If you have any questions, please don't hesitate to contact our support team.</p>
+                            <p style="margin-top: 15px; font-size: 12px; color: #adb5bd;">
+                                © 2024 Your App Name. All rights reserved.
+                            </p>
+                        </div>
+                    </div>
+                </body>
+                </html>
+                """
+            });
     }
 }

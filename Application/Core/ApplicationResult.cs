@@ -10,6 +10,7 @@ public class ApplicationResult<T>
   public string? ErrorMessage { get; set; }
   public bool IsSuccess {get;set;}
   public bool IsFailed  => !IsSuccess;
+  public string? RedirectUrl { get; set; }
 
   public Dictionary<string, string[]>[]? Errors { get; set; } = [];
 
@@ -26,6 +27,14 @@ public class ApplicationResult<T>
       ErrorMessage = errorMessage,
       StatusCode = statusCode,
       IsSuccess = false,
+    };
+  }
+
+  public static ApplicationResult<T> Redirect(string redirectUrl, uint statusCode = 302){
+    return new ApplicationResult<T>{
+      RedirectUrl = redirectUrl,
+      StatusCode = statusCode,
+      IsSuccess = true,
     };
   }
 }
