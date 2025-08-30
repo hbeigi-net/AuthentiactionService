@@ -6,6 +6,7 @@ namespace Domain.Entities;
 
 public class ApplicationUser : IdentityUser<Guid>, IAuditableEntity
 {
+  public override string? Email { get => base.Email; set => base.Email = value; }
   public string? FirstName { get; set; }
   public string? LastName { get; set; }
   public string FullName => $"{FirstName} {LastName}";
@@ -19,6 +20,7 @@ public class ApplicationUser : IdentityUser<Guid>, IAuditableEntity
   public string? UpdatedBy { get; set; }
   public long PasswordUpdatedAt { get; set; }
 
+  public bool HasPassword { get; set; }
   // Navigation properties 
   public virtual ICollection<ApplicationUserRole> UserRoles { get; set; } = new List<ApplicationUserRole>();
   public virtual ICollection<RefreshToken> ReferashTokens { get; set; } = [];

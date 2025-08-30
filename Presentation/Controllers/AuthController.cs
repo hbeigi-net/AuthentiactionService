@@ -14,12 +14,29 @@ public class AuthController : BaseController
 
     return result.ToActionResult();
   }
+
+  [HttpPost("phone-signup")]
+  [AllowAnonymous]
+  public async Task<IActionResult> PhoneSignUp([FromBody] PhoneSignup.Command command)
+  {
+    var result = await Mediator.Send(command);
+    return result.ToActionResult();
+  }
+
   [HttpPost("signin")]
   [AllowAnonymous]
   public async Task<IActionResult> SignIn([FromBody] SignIn.Command command)
   {
     var result = await Mediator.Send(command);
 
+    return result.ToActionResult();
+  }
+
+  [HttpPost("phone-signin")]
+  [AllowAnonymous]
+  public async Task<IActionResult> VerifyPhone([FromBody] PhoneSignin.Command command)
+  {
+    var result = await Mediator.Send(command);
     return result.ToActionResult();
   }
 
@@ -32,13 +49,13 @@ public class AuthController : BaseController
   }
 
   [HttpPost("change-password")]
-  public async Task<IActionResult> ChangePassword([FromBody] ChangePassword.Command command) 
+  public async Task<IActionResult> ChangePassword([FromBody] ChangePassword.Command command)
   {
-     var result = await  Mediator.Send(command);  
-     return result.ToActionResult();
+    var result = await Mediator.Send(command);
+    return result.ToActionResult();
   }
 
-  [HttpPost("logout")] 
+  [HttpPost("logout")]
   public async Task<IActionResult> Logout([FromBody] Logout.Command command)
   {
     var result = await Mediator.Send(command);

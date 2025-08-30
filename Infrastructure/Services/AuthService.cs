@@ -28,7 +28,9 @@ public class AuthService(
         IConfiguration config,
         ICurrentUserService currentUserService,
         IOptions<JwtSettings> jwtSettings,
-        IEmailService emailService
+        IEmailService emailService,
+        ISMSService smsService,
+        ICacheService cacheService
  ) : IAuthService
 {
     private readonly JwtSettings _jwtSettings = jwtSettings.Value;
@@ -40,6 +42,8 @@ public class AuthService(
     private readonly IConfiguration _config = config;
     private readonly ICurrentUserService _currentUserService = currentUserService;
     private readonly IEmailService _emailService = emailService;
+    private readonly ISMSService _smsService = smsService;
+    private readonly ICacheService _cacheService = cacheService;
 
     public async Task<ApplicationResult<SigninResponseDTO>> SignInAsync(SignIn.Command request)
     {
@@ -53,8 +57,9 @@ public class AuthService(
                 _logger.LogWarning("Login attempt with non-existent email: {Email}", request.Email);
                 return ApplicationResult<SigninResponseDTO>.Fail("Invalid Creadentials");
             }
-            
-            if(!user.EmailConfirmed) {
+
+            if (!user.EmailConfirmed)
+            {
                 _logger.LogWarning("Login attempt with unconfirmed email: {Email}", request.Email);
                 return ApplicationResult<SigninResponseDTO>.Fail("Email not confirmed, Please Verify your email");
             }
@@ -63,6 +68,12 @@ public class AuthService(
             {
                 _logger.LogWarning("Login attempt with inactive account: {Email}", request.Email);
                 return ApplicationResult<SigninResponseDTO>.Fail("invalid credentials");
+            }
+
+            if (!user.HasPassword)
+            {
+                _logger.LogWarning("Login attempt with passwordless account: {Email}", request.Email);
+                return ApplicationResult<SigninResponseDTO>.Fail("This account is not password protected, Use Phone Number and OTP to login");
             }
 
             var result = await signInManager.CheckPasswordSignInAsync(user, request.Password, lockoutOnFailure: true);
@@ -130,7 +141,7 @@ public class AuthService(
 
             var userManager = _unitOfWork.SignInManager.UserManager;
             var signInManager = _unitOfWork.SignInManager;
-            
+
 
             Guid userId = Guid.NewGuid();
             var user = new ApplicationUser
@@ -152,7 +163,7 @@ public class AuthService(
             }
 
             var emailVerificationToken = await userManager.GenerateEmailConfirmationTokenAsync(user);
-            
+
             bool isEmailSent = await SendVerificationEmailAsync(user.Email!, emailVerificationToken);
 
             if (!isEmailSent)
@@ -197,10 +208,10 @@ public class AuthService(
     {
         var id = Guid.Parse(userId);
         var refereshTokens = await _dbContext.RefreshTokens
-            .Where(rt => rt.UserId == id )
+            .Where(rt => rt.UserId == id)
             .ToListAsync(cancellationToken);
 
-        if(refereshTokens is null) return ApplicationResult<bool>.Fail("No refresh tokens found");
+        if (refereshTokens is null) return ApplicationResult<bool>.Fail("No refresh tokens found");
 
         foreach (var token in refereshTokens)
         {
@@ -363,12 +374,12 @@ public class AuthService(
         }
         var verificationToken = await userManager.GenerateEmailConfirmationTokenAsync(user);
         verificationToken = WebEncoders.Base64UrlEncode(Encoding.UTF8.GetBytes(verificationToken));
-        if(user.EmailConfirmed)
+        if (user.EmailConfirmed)
         {
             return ApplicationResult<bool>.Fail("Email already confirmed");
         }
 
-        if(!user.IsActive)
+        if (!user.IsActive)
         {
             return ApplicationResult<bool>.Fail("User is not active");
         }
@@ -389,11 +400,12 @@ public class AuthService(
     {
         var verificationToken = WebEncoders.Base64UrlEncode(Encoding.UTF8.GetBytes(token));
         var verificationLink = $"{_config["ClientOptions:ClientUrl"]}{_config["VerificationPath"]}?email={email}&token={verificationToken}";
-        
-        return await _emailService.SendEmailAsync(new EmailMessage{
-                To = email,
-                Subject = "Welcome to our app",
-                Body = $$"""
+
+        return await _emailService.SendEmailAsync(new EmailMessage
+        {
+            To = email,
+            Subject = "Welcome to our app",
+            Body = $$"""
                 <!DOCTYPE html>
                 <html lang="en">
                 <head>
@@ -567,6 +579,107 @@ public class AuthService(
                 </body>
                 </html>
                 """
-            });
+        });
     }
+
+    public async Task<ApplicationResult<SingupResponseDTO>> PhoneSignUpAsync(PhoneSignup.Command request, CancellationToken cancellationToken)
+    {
+        var phoneNumber = request.PhoneNumber;
+
+        var isPhoneNumberTaken = await _unitOfWork.Users.IsPhoneNumberTakenAsync(phoneNumber);
+
+        if (isPhoneNumberTaken)
+        {
+            return ApplicationResult<SingupResponseDTO>.Fail("Phone number not available");
+        }
+
+        //var isOTPSent = await _smsService.SendOTPAsync(phoneNumber, "123456", cancellationToken);
+
+        //if(!isOTPSent)
+        //{
+        //    return ApplicationResult<SingupResponseDTO>.Fail("An Error Occured while sending OTP");
+        //}
+
+        var otp = "123456";
+        var cacheKey = $"otp:{phoneNumber}";
+        await _cacheService.SetAsync(cacheKey, otp, TimeSpan.FromMinutes(2)); // 2 minutes
+        _logger.LogInformation("OTP sent to {PhoneNumber}", phoneNumber);
+        return ApplicationResult<SingupResponseDTO>.Ok(new SingupResponseDTO());
+
+    }
+
+    public async Task<ApplicationResult<PhoneSigninResponseDto>> PhoneSignInAsync(PhoneSignin.Command request)
+    {
+        var otp = await _cacheService.GetAsync<string>($"otp:{request.PhoneNumber}");
+        if (otp is null || otp != request.OTP)
+        {
+            return ApplicationResult<PhoneSigninResponseDto>.Fail("Invalid OTP");
+        }
+        else
+        {
+            await _cacheService.RemoveAsync($"otp:{request.PhoneNumber}");
+        }
+
+        var user = await _unitOfWork.Users.GetByPhoneNumberAsync(request.PhoneNumber);
+
+        // create new user with phone numebr if not exists
+        if (user is null)
+        {
+            try
+            {
+                await _unitOfWork.BeginTransactionAsync();
+                var newUser = new ApplicationUser
+                {
+                    Id = Guid.NewGuid(),
+                    UserName = request.PhoneNumber,
+                    PhoneNumber = request.PhoneNumber,
+                    PhoneNumberConfirmed = true,
+                    IsActive = true,
+                    HasPassword = false,
+                    CreatedAt = DateTime.UtcNow,
+                };
+
+                var userCreated = await _unitOfWork.Users.CreateAsync(newUser);
+                if (!userCreated)
+                {
+                    return ApplicationResult<PhoneSigninResponseDto>.Fail("Error creatingUser");
+                }
+                var aToken = await _jwtTokenService.GenerateAccessTokenAsync(newUser);
+                await _unitOfWork.CommitTransactionAsync();
+
+                return ApplicationResult<PhoneSigninResponseDto>.Ok(new PhoneSigninResponseDto
+                {
+                    AccessToken = aToken,
+                    RefreshToken = "" ,
+                });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error creating new user for phone number: {PhoneNumber}", request.PhoneNumber);
+                return ApplicationResult<PhoneSigninResponseDto>.Fail("An error occurred while creating new user");
+            }
+        }
+        
+        var signInManager = _unitOfWork.SignInManager;
+        var result = await signInManager.CheckPasswordSignInAsync(user, "", lockoutOnFailure: true);
+
+        if (!result.Succeeded)
+        {
+            return ApplicationResult<PhoneSigninResponseDto>.Fail("Invalid password");
+        }
+
+        if (result.IsLockedOut)
+        {
+            return ApplicationResult<PhoneSigninResponseDto>.Fail("Too many requests, please try again later");
+        }
+
+        var accessToken = await _jwtTokenService.GenerateAccessTokenAsync(user);
+
+        return ApplicationResult<PhoneSigninResponseDto>.Ok(new PhoneSigninResponseDto
+        {
+            AccessToken = accessToken,
+            RefreshToken = "",
+        });
+    }
+
 }

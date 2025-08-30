@@ -18,6 +18,7 @@ using Microsoft.AspNetCore.Mvc.Authorization;
 using Persistence.Seed;
 using Application.Interfaces;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using StackExchange.Redis;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -25,7 +26,7 @@ builder.Services.Configure<JwtSettings>(builder.Configuration.GetSection("JwtSet
 builder.Services.Configure<EmailSettings>(builder.Configuration.GetSection("EmailSettings"));
 
 builder.Services
-    .AddControllers(opt => 
+    .AddControllers(opt =>
     {
         var policy = new AuthorizationPolicyBuilder().RequireAuthenticatedUser().Build();
         opt.Filters.Add(new AuthorizeFilter(policy));
@@ -34,11 +35,13 @@ builder.Services.AddDbContext<AuthDbContext>(opt =>
 {
     opt.UseSqlServer(builder.Configuration.GetConnectionString("DefaultConnection"));
 });
+
 builder.Services
     .AddIdentity<ApplicationUser, ApplicationRole>()
     .AddEntityFrameworkStores<AuthDbContext>()
     .AddRoles<ApplicationRole>()
     .AddDefaultTokenProviders();
+
 builder.Services.AddScoped<TokenValidator>();
 builder.Services
     .AddAuthentication(options =>
@@ -61,7 +64,8 @@ builder.Services
             ValidateLifetime = true,
             ClockSkew = TimeSpan.Zero
         };
-        options.Events = new JwtBearerEvents(){
+        options.Events = new JwtBearerEvents()
+        {
             OnTokenValidated = async (context) =>
             {
                 var claimsPrincipal = context.Principal;
@@ -76,26 +80,35 @@ builder.Services
     });
 builder.Services.Configure<IdentityOptions>(options =>
 {
-    options.Password.RequireDigit = true;
-    options.Password.RequireLowercase = true;
-    options.Password.RequireNonAlphanumeric = true;
-    options.Password.RequireUppercase = true;
-    options.Password.RequiredLength = 8;
-    options.Password.RequiredUniqueChars = 1;
+    //options.Password.RequireDigit = true;
+    //options.Password.RequireLowercase = true;
+    //options.Password.RequireNonAlphanumeric = true;
+    //options.Password.RequireUppercase = true;
+    //options.Password.RequiredLength = 8;
+    //options.Password.RequiredUniqueChars = 1;
+
+
+    options.User.RequireUniqueEmail = false;
+    options.User.AllowedUserNameCharacters = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-._@+";
+
+    options.Password.RequireDigit = false;
+    options.Password.RequireLowercase = false;
+    options.Password.RequireNonAlphanumeric = false;
+    options.Password.RequireUppercase = false;
+    options.Password.RequiredLength = -1;
+    options.Password.RequiredUniqueChars = 0;
 
     options.Lockout.DefaultLockoutTimeSpan = TimeSpan.FromMinutes(5);
     options.Lockout.MaxFailedAccessAttempts = 5;
     options.Lockout.AllowedForNewUsers = true;
 
-    options.User.AllowedUserNameCharacters = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-._@+";
-    options.User.RequireUniqueEmail = true;
 });
 builder.Services.AddMediatR(cfg =>
 {
     cfg.RegisterServicesFromAssemblyContaining<ApplicationAssemblyMaker>();
     cfg.AddOpenBehavior(typeof(ValidationInteceptor<,>));
 });
-builder.Services.AddAutoMapper(cfg => { },typeof(MappingProfiles));
+builder.Services.AddAutoMapper(cfg => { }, typeof(MappingProfiles));
 builder.Services.AddValidators();
 builder.Services.AddApiVersioning(options =>
 {
@@ -107,12 +120,20 @@ builder.Services.AddApiVersioning(options =>
 
 builder.Services.AddScoped<ICurrentUserService, CurrentUserService>();
 builder.Services.AddScoped<IUnitOfWork, UnitOfWork>();
-builder.Services.AddScoped<IApplicationUserRepository, ApplicationUserRepository >();
+builder.Services.AddScoped<IApplicationUserRepository, ApplicationUserRepository>();
 builder.Services.AddScoped<IRefreshTokenRepository, RefreshTokenRepository>();
 builder.Services.AddScoped<IRefreshTokenRepository, RefreshTokenRepository>();
 builder.Services.AddScoped<IJwtTokenService, JwtTokenService>();
 builder.Services.AddScoped<IAuthService, AuthService>();
 builder.Services.AddTransient<IEmailService, EmailService>();
+builder.Services.AddTransient<ISMSService, SMSService>();
+builder.Services.AddScoped<ICacheService, RedisCacheService>();
+
+builder.Services.AddSingleton<IConnectionMultiplexer>(sp =>
+{
+    var configuration = builder.Configuration.GetConnectionString("Redis")!;
+    return ConnectionMultiplexer.Connect(configuration);
+});
 
 var app = builder.Build();
 

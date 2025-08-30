@@ -11,6 +11,8 @@ public interface IAuthService
 {
   Task<ApplicationResult<SigninResponseDTO>> SignInAsync(SignIn.Command request);
   Task<ApplicationResult<SingupResponseDTO>> SignUpAsync(Singup.Command request);
+  Task<ApplicationResult<SingupResponseDTO>> PhoneSignUpAsync(PhoneSignup.Command request, CancellationToken cancellationToken);
+  Task<ApplicationResult<PhoneSigninResponseDto>> PhoneSignInAsync(PhoneSignin.Command request);
   Task<ApplicationResult<RefreshTokenResponseDto>> RefreshToken(string refreshToken);
   Task<ApplicationResult<bool>> LogoutAsync(string refreshToken, CancellationToken cancellationToken);
   Task<ApplicationResult<bool>> RevokeAllTokensAsync(string userId, CancellationToken cancellationToken);

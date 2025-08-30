@@ -1,0 +1,10 @@
+// redis 
+docker run -d \
+  --name redis-server \
+  -p 6379:6379 \
+  -v redis_data:/data \
+  redis:latest \
+  redis-server --maxmemory 256mb --maxmemory-policy allkeys-lru
+
+
+docker run -d   --name redisinsight   -p 5540:5540   redislabs/redisinsight:latest

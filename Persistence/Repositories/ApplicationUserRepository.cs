@@ -30,10 +30,16 @@ public class ApplicationUserRepository(
   {
     return Task.FromResult(_userManager.Users.AsQueryable());
   }
-  
+
+  public async Task<bool> CreateAsync(ApplicationUser user)
+  {
+    var result = await _userManager.CreateAsync(user);
+    return result.Succeeded;
+  }
   public async Task<bool> CreateAsync(ApplicationUser user, string password)
   {
     var result = await _userManager.CreateAsync(user, password);
+
     return result.Succeeded;
   }
 
@@ -91,4 +97,12 @@ public class ApplicationUserRepository(
     return await _userManager.IsInRoleAsync(user, roleName);
   }
 
+  public async Task<bool> IsPhoneNumberTakenAsync(string phoneNumber, Guid? excludeUserId = null)
+  {
+    return await _userManager.Users.AnyAsync(usr => usr.PhoneNumber == phoneNumber && usr.Id != excludeUserId);
+  }
+  public async Task<ApplicationUser?> GetByPhoneNumberAsync(string phoneNumber)
+  {
+    return await _userManager.Users.FirstOrDefaultAsync(usr => usr.PhoneNumber == phoneNumber);
+  }
 }
