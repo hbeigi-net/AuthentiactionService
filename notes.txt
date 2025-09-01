@@ -1,20 +1,14 @@
 # add dto for updating user 
-# fluent result always set the status code to 200 in success and fail
 # IsInRoleAsync method in ApplicaitonUserRepository uses a pattern for checking user is in the role or not&& ai'nt it better to check it using a single query through the authdb contet ? meaning adding another dbSet for the ApplicationUserRole ;
 # is it reasonable to register UnitOfWork service as scoped or its better to be transient ? 
 # how to store some keys like keys for getting and setting cache in redis ? 
-# login endpoint for just otp 
+# validation should be added for phone endpoints 
 
+
+// swagger gen is not ok
 
 ## what is needed 
-  - signup 
-  - signin
-  - confirm email
   - compelete info
-  - change password 
   - reset password
   - change roles 
   - resterict access to content 
-  - referesh the access token
-  - phone number and otp || if its possible 
-

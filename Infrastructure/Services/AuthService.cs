@@ -30,7 +30,7 @@ public class AuthService(
         IOptions<JwtSettings> jwtSettings,
         IEmailService emailService,
         ISMSService smsService,
-        ICacheService cacheService
+        IOTPService otpService
  ) : IAuthService
 {
     private readonly JwtSettings _jwtSettings = jwtSettings.Value;
@@ -43,7 +43,7 @@ public class AuthService(
     private readonly ICurrentUserService _currentUserService = currentUserService;
     private readonly IEmailService _emailService = emailService;
     private readonly ISMSService _smsService = smsService;
-    private readonly ICacheService _cacheService = cacheService;
+    private readonly IOTPService _otpService = otpService;
 
     public async Task<ApplicationResult<SigninResponseDTO>> SignInAsync(SignIn.Command request)
     {
@@ -128,7 +128,6 @@ public class AuthService(
             return ApplicationResult<SigninResponseDTO>.Fail("An error occurred during login");
         }
     }
-
     public async Task<ApplicationResult<SingupResponseDTO>> SignUpAsync(Singup.Command request)
     {
         try
@@ -152,6 +151,7 @@ public class AuthService(
                 EmailConfirmed = false,
                 CreatedAt = DateTime.UtcNow,
                 CreatedBy = userId.ToString(),
+                HasPassword = true
             };
 
             var result = await userManager.CreateAsync(user, request.Password);
@@ -183,7 +183,104 @@ public class AuthService(
             return ApplicationResult<SingupResponseDTO>.Fail("An error occurred during registration");
         }
     }
+    public async Task<ApplicationResult<SingupResponseDTO>> PhoneSignUpAsync(PhoneSignup.Command request, CancellationToken cancellationToken)
+    {
+        var phoneNumber = request.PhoneNumber;
+        var isOtpSent = await _otpService.SendSignupOtpAsync(phoneNumber);
 
+        if (!isOtpSent)
+        {
+            return ApplicationResult<SingupResponseDTO>.Fail("An Error Occured while sending OTP");
+        }
+
+        return ApplicationResult<SingupResponseDTO>.Ok(new SingupResponseDTO());
+    }
+    public async Task<ApplicationResult<SigninResponseDTO>> CompletePhoneSingup(CompletePhoneSignup.Command request, CancellationToken cancellationToken)
+    {
+        var otpVerified = await _otpService.VerifySingupOtpAsync(request.PhoneNumber, request.OTP);
+        var isPhoneNumberTaken = await _unitOfWork.Users.IsPhoneNumberTakenAsync(request.PhoneNumber);
+
+        if (isPhoneNumberTaken)
+        {
+            return ApplicationResult<SigninResponseDTO>.Fail("PhoneNumber alrady Exists");
+        }
+
+        if (!otpVerified)
+        {
+            return ApplicationResult<SigninResponseDTO>.Fail("Invalid OTP");
+        }
+
+        try
+        {
+            await _unitOfWork.BeginTransactionAsync();
+            var newUser = new ApplicationUser
+            {
+                Id = Guid.NewGuid(),
+                UserName = request.PhoneNumber,
+                PhoneNumber = request.PhoneNumber,
+                PhoneNumberConfirmed = true,
+                IsActive = true,
+                HasPassword = false,
+                CreatedAt = DateTime.UtcNow,
+            };
+
+            var userCreated = await _unitOfWork.Users.CreateAsync(newUser);
+            if (!userCreated)
+            {
+                return ApplicationResult<SigninResponseDTO>.Fail("Error creatingUser");
+            }
+            var aToken = await _jwtTokenService.GenerateAccessTokenAsync(newUser);
+            await _unitOfWork.CommitTransactionAsync();
+
+            return ApplicationResult<SigninResponseDTO>.Ok(new SigninResponseDTO
+            {
+                AccessToken = aToken,
+                // no refresh token for login with otp
+                RefreshToken = "",
+            });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error creating new user for phone number: {PhoneNumber}", request.PhoneNumber);
+            return ApplicationResult<SigninResponseDTO>.Fail("An error occurred while creating new user");
+        }
+
+    }
+    public async Task<ApplicationResult<bool>> RequestSigninOtp(RequestSinginOtp.Command request)
+    {
+        // may i should check for phone number to exist before sending signin otp
+        var otpSent = await _otpService.SendSigninOtpAsync(request.PhoneNumber);
+
+        if (!otpSent)
+        {
+            return ApplicationResult<bool>.Fail("an Error occured while trying send otp");
+        }
+
+        return ApplicationResult<bool>.Ok(true);
+    }
+    public async Task<ApplicationResult<SigninResponseDTO>> PhoneSignInAsync(PhoneSignin.Command request)
+    {
+        var otpVerified = await _otpService.VerifySigninOtpAsync(request.PhoneNumber, request.OTP);
+
+        if (!otpVerified)
+        {
+            return ApplicationResult<SigninResponseDTO>.Fail("Invalid OTP");
+        }
+
+        var user = await _unitOfWork.Users.GetByPhoneNumberAsync(request.PhoneNumber);
+        if (user is null)
+        {
+            return ApplicationResult<SigninResponseDTO>.Fail("User not Found");
+        }
+
+        var accessToken = await _jwtTokenService.GenerateAccessTokenAsync(user);
+
+        return ApplicationResult<SigninResponseDTO>.Ok(new SigninResponseDTO
+        {
+            AccessToken = accessToken,
+            RefreshToken = "",
+        });
+    }
     public async Task<ApplicationResult<bool>> LogoutAsync(string refreshToken, CancellationToken cancellationToken)
     {
         var tokeClaims = _jwtTokenService.ValidateToken(refreshToken, _jwtSettings.RefreshTokenSecretKey);
@@ -339,6 +436,10 @@ public class AuthService(
             return ApplicationResult<bool>.Fail("User not found", 400);
         }
 
+        if (!user.HasPassword)
+        {
+            return ApplicationResult<bool>.Fail("Password change not permited");
+        }
         var result = await singinManager.CheckPasswordSignInAsync(user, request.CurrentPassword, lockoutOnFailure: true);
 
         if (result.IsLockedOut)
@@ -581,105 +682,4 @@ public class AuthService(
                 """
         });
     }
-
-    public async Task<ApplicationResult<SingupResponseDTO>> PhoneSignUpAsync(PhoneSignup.Command request, CancellationToken cancellationToken)
-    {
-        var phoneNumber = request.PhoneNumber;
-
-        var isPhoneNumberTaken = await _unitOfWork.Users.IsPhoneNumberTakenAsync(phoneNumber);
-
-        if (isPhoneNumberTaken)
-        {
-            return ApplicationResult<SingupResponseDTO>.Fail("Phone number not available");
-        }
-
-        //var isOTPSent = await _smsService.SendOTPAsync(phoneNumber, "123456", cancellationToken);
-
-        //if(!isOTPSent)
-        //{
-        //    return ApplicationResult<SingupResponseDTO>.Fail("An Error Occured while sending OTP");
-        //}
-
-        var otp = "123456";
-        var cacheKey = $"otp:{phoneNumber}";
-        await _cacheService.SetAsync(cacheKey, otp, TimeSpan.FromMinutes(2)); // 2 minutes
-        _logger.LogInformation("OTP sent to {PhoneNumber}", phoneNumber);
-        return ApplicationResult<SingupResponseDTO>.Ok(new SingupResponseDTO());
-
-    }
-
-    public async Task<ApplicationResult<PhoneSigninResponseDto>> PhoneSignInAsync(PhoneSignin.Command request)
-    {
-        var otp = await _cacheService.GetAsync<string>($"otp:{request.PhoneNumber}");
-        if (otp is null || otp != request.OTP)
-        {
-            return ApplicationResult<PhoneSigninResponseDto>.Fail("Invalid OTP");
-        }
-        else
-        {
-            await _cacheService.RemoveAsync($"otp:{request.PhoneNumber}");
-        }
-
-        var user = await _unitOfWork.Users.GetByPhoneNumberAsync(request.PhoneNumber);
-
-        // create new user with phone numebr if not exists
-        if (user is null)
-        {
-            try
-            {
-                await _unitOfWork.BeginTransactionAsync();
-                var newUser = new ApplicationUser
-                {
-                    Id = Guid.NewGuid(),
-                    UserName = request.PhoneNumber,
-                    PhoneNumber = request.PhoneNumber,
-                    PhoneNumberConfirmed = true,
-                    IsActive = true,
-                    HasPassword = false,
-                    CreatedAt = DateTime.UtcNow,
-                };
-
-                var userCreated = await _unitOfWork.Users.CreateAsync(newUser);
-                if (!userCreated)
-                {
-                    return ApplicationResult<PhoneSigninResponseDto>.Fail("Error creatingUser");
-                }
-                var aToken = await _jwtTokenService.GenerateAccessTokenAsync(newUser);
-                await _unitOfWork.CommitTransactionAsync();
-
-                return ApplicationResult<PhoneSigninResponseDto>.Ok(new PhoneSigninResponseDto
-                {
-                    AccessToken = aToken,
-                    RefreshToken = "" ,
-                });
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Error creating new user for phone number: {PhoneNumber}", request.PhoneNumber);
-                return ApplicationResult<PhoneSigninResponseDto>.Fail("An error occurred while creating new user");
-            }
-        }
-        
-        var signInManager = _unitOfWork.SignInManager;
-        var result = await signInManager.CheckPasswordSignInAsync(user, "", lockoutOnFailure: true);
-
-        if (!result.Succeeded)
-        {
-            return ApplicationResult<PhoneSigninResponseDto>.Fail("Invalid password");
-        }
-
-        if (result.IsLockedOut)
-        {
-            return ApplicationResult<PhoneSigninResponseDto>.Fail("Too many requests, please try again later");
-        }
-
-        var accessToken = await _jwtTokenService.GenerateAccessTokenAsync(user);
-
-        return ApplicationResult<PhoneSigninResponseDto>.Ok(new PhoneSigninResponseDto
-        {
-            AccessToken = accessToken,
-            RefreshToken = "",
-        });
-    }
-
 }

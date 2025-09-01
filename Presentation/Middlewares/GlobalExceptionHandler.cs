@@ -28,7 +28,6 @@ internal sealed class GlobalExceptionHandler(
         _ => StatusCodes.Status500InternalServerError,
       };
 
-
       var errorResponse = new ApiResponse<object>
       {
         ErrorMessage = exp.Message,

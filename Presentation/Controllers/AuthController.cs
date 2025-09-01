@@ -23,6 +23,24 @@ public class AuthController : BaseController
     return result.ToActionResult();
   }
 
+  [HttpPost("verify-phone-signup")]
+  [AllowAnonymous]
+  public async Task<IActionResult> VerifyPhoneSignup([FromBody] CompletePhoneSignup.Command command)
+  {
+    var result = await Mediator.Send(command);
+
+    return result.ToActionResult();
+  }
+
+  [HttpPost("send-phone-otp")]
+  [AllowAnonymous]
+  public async Task<IActionResult> SendPhoneOtp([FromBody] RequestSinginOtp.Command command)
+  {
+    var result = await Mediator.Send(command);
+
+    return result.ToActionResult();
+  }
+
   [HttpPost("signin")]
   [AllowAnonymous]
   public async Task<IActionResult> SignIn([FromBody] SignIn.Command command)
