@@ -1,5 +1,5 @@
 
-using Application.Intefaces;
+using Application.Interfaces;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 

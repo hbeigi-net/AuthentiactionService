@@ -1,6 +1,6 @@
 
 
-using Application.Intefaces;
+using Application.Interfaces;
 
 namespace Infrastructure.Services;
 

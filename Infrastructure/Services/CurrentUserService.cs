@@ -1,7 +1,7 @@
 
 
 using System.Security.Claims;
-using Application.Intefaces;
+using Application.Interfaces;
 using Domain.Entities;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Identity;

@@ -1,9 +1,11 @@
-using System;
 using Application.Auth.Commands;
+using Application.Auth.Validators;
+using Application.User.Commands;
+using Application.User.Validators;
 using FluentValidation;
 using Microsoft.Extensions.DependencyInjection;
 
-namespace Application.Auth.Validators;
+namespace Application.Core;
 
 public static class ValidatorsExtension
 {
@@ -13,7 +15,10 @@ public static class ValidatorsExtension
     services.AddScoped<IValidator<SignIn.Command>, SigninValidator>();
     services.AddScoped<IValidator<ChangePassword.Command>, ChangePasswordValidator>();
     services.AddScoped<IValidator<PhoneSignup.Command>, MobileSignupValidator>();
+    services.AddScoped<IValidator<RequestSinginOtp.Command>, RequestSigninOtpValidator>();
+    services.AddScoped <IValidator<PhoneSignin.Command>, PhoneSigninValidator>();
 
+    services.AddScoped<IValidator<ResetPassword.Command>, ResetPasswordValidator>();
     return services;
   }
 }

@@ -1,19 +1,23 @@
 
+using Application.Interfaces;
+using Application.User.DTOs;
 using Domain.Entities;
-using Domain.Interfaces;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Persistence.Data;
+using AutoMapper;
+using AutoMapper.QueryableExtensions;
 
 namespace Persistence.Repositories;
 public class ApplicationUserRepository(
   AuthDbContext dbContext,
-  UserManager<ApplicationUser> userManager
+  UserManager<ApplicationUser> userManager,
+  IMapper mapper
 ) : IApplicationUserRepository
 {
   private readonly AuthDbContext _dbContext = dbContext;
   private readonly UserManager<ApplicationUser> _userManager = userManager;
-
+  private readonly IMapper _mapper = mapper;
   public async Task<ApplicationUser?> GetByIdAsync(Guid id)
   {
     return await _userManager.FindByIdAsync(id.ToString());
@@ -105,4 +109,15 @@ public class ApplicationUserRepository(
   {
     return await _userManager.Users.FirstOrDefaultAsync(usr => usr.PhoneNumber == phoneNumber);
   }
+
+  public async Task<UserInfoDto?> GetUserInfoAsync(Guid id)
+  {
+    return await _userManager
+      .Users
+      .Where(u => u.Id == id)
+      .ProjectTo<UserInfoDto>(_mapper.ConfigurationProvider)
+      .FirstOrDefaultAsync();
+  }
+
+  
 }

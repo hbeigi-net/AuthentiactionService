@@ -1,10 +1,9 @@
 using Application.Auth.Commands;
 using Application.Auth.DTOs;
-using Application.Intefaces;
+using Application.Interfaces;
 using Domain.Entities;
 using Microsoft.Extensions.Logging;
 using AutoMapper;
-using Application.Interfaces;
 using Persistence.Data;
 using Application.Core;
 using MediatR;
@@ -16,6 +15,7 @@ using Application.Core.Models;
 using System.Text;
 using System.Buffers.Text;
 using Microsoft.AspNetCore.WebUtilities;
+using Application.User.Commands;
 
 namespace Infrastructure.Services;
 
@@ -30,7 +30,8 @@ public class AuthService(
         IOptions<JwtSettings> jwtSettings,
         IEmailService emailService,
         ISMSService smsService,
-        IOTPService otpService
+        IOTPService otpService, 
+        IEmailTemplateService emailTemplateService
  ) : IAuthService
 {
     private readonly JwtSettings _jwtSettings = jwtSettings.Value;
@@ -44,7 +45,7 @@ public class AuthService(
     private readonly IEmailService _emailService = emailService;
     private readonly ISMSService _smsService = smsService;
     private readonly IOTPService _otpService = otpService;
-
+    private readonly IEmailTemplateService _emailTemplateService = emailTemplateService;
     public async Task<ApplicationResult<SigninResponseDTO>> SignInAsync(SignIn.Command request)
     {
         try
@@ -348,7 +349,7 @@ public class AuthService(
         }
     }
 
-    public async Task<ApplicationResult<Unit>> ForgotPasswordAsync(string email)
+    public async Task<ApplicationResult<bool>> ForgotPasswordAsync(string email)
     {
         try
         {
@@ -358,22 +359,49 @@ public class AuthService(
             {
                 // Don't reveal if email exists or not for security
                 _logger.LogInformation("Password reset requested for email: {Email}", email);
-                return ApplicationResult<Unit>.Ok(Unit.Value);
+                return ApplicationResult<bool>.Ok(true);
             }
 
             var token = await userManager.GeneratePasswordResetTokenAsync(user);
 
+            var encodedToken = WebEncoders.Base64UrlEncode(Encoding.UTF8.GetBytes(token));
             // Send password reset email
-            //await _emailService.SendPasswordResetAsync(user.Email, user.FullName, user.Id.ToString(), token);
+            var emailTemplate = _emailTemplateService.GetResetPasswordTemplate(user.Email!, encodedToken);
+            var emailSent = await _emailService.SendEmailAsync(emailTemplate);
+
+            if (!emailSent)
+            {
+                return ApplicationResult<bool>.Fail("Failed to send password reset email", 500);
+            }
 
             _logger.LogInformation("Password reset email sent for user: {UserId}", user.Id);
-            return ApplicationResult<Unit>.Ok(Unit.Value);
+            return ApplicationResult<bool>.Ok(true);
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error processing forgot password for email: {Email}", email);
-            return ApplicationResult<Unit>.Fail("An error occurred while processing password reset");
+            return ApplicationResult<bool>.Fail("An error occurred while processing password reset");
         }
+    }
+
+    public async Task<ApplicationResult<bool>> ResetPasswordAsync(ResetPassword.Command request)
+    {
+        var userManager = _unitOfWork.SignInManager.UserManager;
+        var user = await userManager.FindByEmailAsync(request.Email);
+        if (user == null)
+        {
+            return ApplicationResult<bool>.Fail("User not found");
+        }
+
+        var decodedToken = Encoding.UTF8.GetString(WebEncoders.Base64UrlDecode(request.Token));
+        var result = await userManager.ResetPasswordAsync(user, decodedToken, request.NewPassword);
+        if (!result.Succeeded)
+        {
+            var errors = string.Join(", ", result.Errors.Select(e => e.Description));
+            return ApplicationResult<bool>.Fail(errors);
+        }
+
+        return ApplicationResult<bool>.Redirect($"{_config["ClientOptions:ClientLoginUrl"]}");
     }
 
     public async Task<ApplicationResult<RefreshTokenResponseDto>> RefreshToken(string token)
@@ -499,187 +527,8 @@ public class AuthService(
 
     private async Task<bool> SendVerificationEmailAsync(string email, string token)
     {
-        var verificationToken = WebEncoders.Base64UrlEncode(Encoding.UTF8.GetBytes(token));
-        var verificationLink = $"{_config["ClientOptions:ClientUrl"]}{_config["VerificationPath"]}?email={email}&token={verificationToken}";
+        var emailTemplate = _emailTemplateService.GetEmailVerificationTemplate(email, token);
 
-        return await _emailService.SendEmailAsync(new EmailMessage
-        {
-            To = email,
-            Subject = "Welcome to our app",
-            Body = $$"""
-                <!DOCTYPE html>
-                <html lang="en">
-                <head>
-                    <meta charset="UTF-8">
-                    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-                    <title>Email Verification</title>
-                    <style>
-                        * {
-                            margin: 0;
-                            padding: 0;
-                            box-sizing: border-box;
-                        }
-                        
-                        body {
-                            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-                            line-height: 1.6;
-                            color: #333;
-                            background-color: #f4f4f4;
-                        }
-                        
-                        .email-container {
-                            max-width: 600px;
-                            margin: 0 auto;
-                            background-color: #ffffff;
-                            border-radius: 8px;
-                            overflow: hidden;
-                            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
-                        }
-                        
-                        .header {
-                            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-                            color: white;
-                            padding: 30px 20px;
-                            text-align: center;
-                        }
-                        
-                        .header h1 {
-                            font-size: 28px;
-                            font-weight: 600;
-                            margin-bottom: 10px;
-                        }
-                        
-                        .header p {
-                            font-size: 16px;
-                            opacity: 0.9;
-                        }
-                        
-                        .content {
-                            padding: 40px 30px;
-                        }
-                        
-                        .welcome-text {
-                            font-size: 18px;
-                            color: #2c3e50;
-                            margin-bottom: 25px;
-                            text-align: center;
-                        }
-                        
-                        .verification-button {
-                            display: inline-block;
-                            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-                            color: white;
-                            text-decoration: none;
-                            padding: 15px 30px;
-                            border-radius: 25px;
-                            font-weight: 600;
-                            font-size: 16px;
-                            margin: 20px 0;
-                            text-align: center;
-                            transition: all 0.3s ease;
-                            box-shadow: 0 4px 15px rgba(102, 126, 234, 0.4);
-                        }
-                        
-                        .verification-button:hover {
-                            transform: translateY(-2px);
-                            box-shadow: 0 6px 20px rgba(102, 126, 234, 0.6);
-                        }
-                        
-                        .info-text {
-                            background-color: #f8f9fa;
-                            border-left: 4px solid #667eea;
-                            padding: 15px;
-                            margin: 20px 0;
-                            border-radius: 0 4px 4px 0;
-                        }
-                        
-                        .footer {
-                            background-color: #f8f9fa;
-                            padding: 20px 30px;
-                            text-align: center;
-                            border-top: 1px solid #e9ecef;
-                        }
-                        
-                        .footer p {
-                            color: #6c757d;
-                            font-size: 14px;
-                            margin-bottom: 10px;
-                        }
-                        
-                        .security-note {
-                            background-color: #fff3cd;
-                            border: 1px solid #ffeaa7;
-                            border-radius: 4px;
-                            padding: 15px;
-                            margin: 20px 0;
-                            color: #856404;
-                        }
-                        
-                        @media only screen and (max-width: 600px) {
-                            .email-container {
-                                margin: 10px;
-                                border-radius: 4px;
-                            }
-                            
-                            .header {
-                                padding: 20px 15px;
-                            }
-                            
-                            .header h1 {
-                                font-size: 24px;
-                            }
-                            
-                            .content {
-                                padding: 25px 20px;
-                            }
-                            
-                            .verification-button {
-                                padding: 12px 25px;
-                                font-size: 14px;
-                            }
-                        }
-                    </style>
-                </head>
-                <body>
-                    <div class="email-container">
-                        <div class="header">
-                            <h1>🎉 Welcome!</h1>
-                            <p>Thank you for joining our community</p>
-                        </div>
-                        
-                        <div class="content">
-                            <div class="welcome-text">
-                                <p>Hi there! 👋</p>
-                                <p>We're excited to have you on board. To get started, please verify your email address by clicking the button below.</p>
-                            </div>
-                            
-                            <div style="text-align: center;">
-                                <a href="{{verificationLink}}" class="verification-button">
-                                    ✅ Verify Email Address
-                                </a>
-                            </div>
-                            
-                            <div class="info-text">
-                                <strong>What happens next?</strong><br>
-                                After verifying your email, you'll have full access to all our features and services.
-                            </div>
-                            
-                            <div class="security-note">
-                                <strong>🔒 Security Note:</strong> If you didn't create an account with us, please ignore this email. Your account security is important to us.
-                            </div>
-                        </div>
-                        
-                        <div class="footer">
-                            <p>This email was sent to you because you signed up for our service.</p>
-                            <p>If you have any questions, please don't hesitate to contact our support team.</p>
-                            <p style="margin-top: 15px; font-size: 12px; color: #adb5bd;">
-                                © 2024 Your App Name. All rights reserved.
-                            </p>
-                        </div>
-                    </div>
-                </body>
-                </html>
-                """
-        });
+        return await _emailService.SendEmailAsync(emailTemplate);
     }
 }

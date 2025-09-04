@@ -1,23 +1,24 @@
 using Domain.Entities;
-using Domain.Interfaces;
 using Application.Interfaces;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore.Storage;
 using Persistence.Data;
 using Persistence.Repositories;
+using AutoMapper;
 
 namespace Infrastructure.Services;
 
 public sealed class UnitOfWork(
     AuthDbContext dbContext,
-    SignInManager<ApplicationUser> signInManager
+    SignInManager<ApplicationUser> signInManager, 
+    IMapper mapper
   ) : IUnitOfWork
 {
   private readonly AuthDbContext _context = dbContext;
   private readonly SignInManager<ApplicationUser> _signInManager = signInManager;
   private IDbContextTransaction? _transaction;
 
-  public IApplicationUserRepository Users => new ApplicationUserRepository(_context, _signInManager.UserManager);
+  public IApplicationUserRepository Users => new ApplicationUserRepository(_context, _signInManager.UserManager, mapper);
 
   public IRefreshTokenRepository RefreshTokens =>  new RefreshTokenRepository(_context);
 

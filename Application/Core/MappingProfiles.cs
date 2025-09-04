@@ -1,5 +1,6 @@
 using System;
 using Application.Auth.DTOs;
+using Application.User.DTOs;
 using AutoMapper;
 using Domain.Entities;
 
@@ -14,6 +15,8 @@ public class MappingProfiles: Profile
         dest => dest.Roles,
         opt => opt.MapFrom(src => src.UserRoles.Select(role => role.Role.Name).ToList())
       );
-    ;
+
+    CreateMap<UpdateUserDto, ApplicationUser>();
+    CreateMap<ApplicationUser, UserInfoDto>();
   }
 }

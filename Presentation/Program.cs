@@ -9,14 +9,13 @@ using Persistence.Data;
 using Presentation.Middlewares;
 using Microsoft.IdentityModel.Tokens;
 using System.Text;
-using Application.Intefaces;
+using Application.Interfaces;
 using Infrastructure.Services;
-using Domain.Interfaces;
 using Persistence.Repositories;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc.Authorization;
 using Persistence.Seed;
-using Application.Interfaces;
+
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Presentation.Utils;
 using StackExchange.Redis;
@@ -125,13 +124,13 @@ builder.Services.AddScoped<ICurrentUserService, CurrentUserService>();
 builder.Services.AddScoped<IUnitOfWork, UnitOfWork>();
 builder.Services.AddScoped<IApplicationUserRepository, ApplicationUserRepository>();
 builder.Services.AddScoped<IRefreshTokenRepository, RefreshTokenRepository>();
-builder.Services.AddScoped<IRefreshTokenRepository, RefreshTokenRepository>();
 builder.Services.AddScoped<IJwtTokenService, JwtTokenService>();
 builder.Services.AddScoped<IAuthService, AuthService>();
 builder.Services.AddTransient<IEmailService, EmailService>();
 builder.Services.AddTransient<ISMSService, SMSService>();
 builder.Services.AddScoped<ICacheService, RedisCacheService>();
 builder.Services.AddScoped<IOTPService, OTPService>();
+builder.Services.AddTransient<IEmailTemplateService, EmailTemplateService>();
 
 builder.Services.AddSingleton<IConnectionMultiplexer>(sp =>
 {

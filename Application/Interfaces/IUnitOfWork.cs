@@ -1,6 +1,6 @@
 using System;
 using Domain.Entities;
-using Domain.Interfaces;
+using Application.Interfaces;
 using Microsoft.AspNetCore.Identity;
 
 namespace Application.Interfaces;

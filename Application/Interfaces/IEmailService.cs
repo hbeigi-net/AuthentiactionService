@@ -1,7 +1,7 @@
 
 using Application.Core.Models;
 
-namespace Application.Intefaces;
+namespace Application.Interfaces;
 
 public interface IEmailService 
 {

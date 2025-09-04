@@ -1,7 +1,7 @@
 using System;
 using Application.Auth.DTOs;
 using Application.Core;
-using Application.Intefaces;
+using Application.Interfaces;
 using FluentResults;
 using FluentValidation;
 using MediatR;

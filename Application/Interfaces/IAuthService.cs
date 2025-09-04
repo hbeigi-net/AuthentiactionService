@@ -2,10 +2,11 @@ using System;
 using Application.Auth.Commands;
 using Application.Auth.DTOs;
 using Application.Core;
+using Application.User.Commands;
 using FluentResults;
 using MediatR;
 
-namespace Application.Intefaces;
+namespace Application.Interfaces;
 
 public interface IAuthService
 {
@@ -19,9 +20,9 @@ public interface IAuthService
   Task<ApplicationResult<bool>> LogoutAsync(string refreshToken, CancellationToken cancellationToken);
   Task<ApplicationResult<bool>> RevokeAllTokensAsync(string userId, CancellationToken cancellationToken);
   Task<ApplicationResult<bool>> ConfirmEmailAsync(string email, string token);
-  Task<ApplicationResult<Unit>> ForgotPasswordAsync(string email);
+  Task<ApplicationResult<bool>> ForgotPasswordAsync(string email);
+  Task<ApplicationResult<bool>> ResetPasswordAsync(ResetPassword.Command request);
   Task<ApplicationResult<bool>> ChangePasswordAsync(ChangePassword.Command request, CancellationToken cancellationToken);
   Task<ApplicationResult<bool>> ResendVerificationEmailAsync(string email);
-
   //Task<Result> ResetPasswordAsync(ResetPasswordRequest request);
 }

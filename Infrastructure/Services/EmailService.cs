@@ -1,7 +1,7 @@
 
 using Application.Core;
 using Application.Core.Models;
-using Application.Intefaces;
+using Application.Interfaces;
 using MailKit.Net.Smtp;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;

@@ -1,7 +1,7 @@
 
 using Domain.Entities;
 
-namespace Application.Intefaces;
+namespace Application.Interfaces;
 
 public interface ICurrentUserService 
 {

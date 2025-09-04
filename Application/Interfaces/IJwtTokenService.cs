@@ -2,7 +2,7 @@ using System;
 using System.Security.Claims;
 using Domain.Entities;
 
-namespace Application.Intefaces;
+namespace Application.Interfaces;
 
 public interface IJwtTokenService
 {

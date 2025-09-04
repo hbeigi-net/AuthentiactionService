@@ -1,7 +1,6 @@
-using System;
 using Domain.Entities;
 
-namespace Domain.Interfaces;
+namespace Application.Interfaces;
 
 public interface IRefreshTokenRepository
 {

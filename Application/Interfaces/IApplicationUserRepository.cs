@@ -1,7 +1,7 @@
-using System;
+using Application.User.DTOs;
 using Domain.Entities;
 
-namespace Domain.Interfaces;
+namespace Application.Interfaces;
 
 public interface IApplicationUserRepository
 {
@@ -19,4 +19,5 @@ public interface IApplicationUserRepository
   Task<IEnumerable<string>> GetUserRolesAsync(Guid userId);
   Task<bool> IsInRoleAsync(Guid userId, string roleName);
   Task<bool> IsPhoneNumberTakenAsync(string phoneNumber, Guid? excludeUserId = null);
+  Task<UserInfoDto?> GetUserInfoAsync(Guid id);
 }
