@@ -28,12 +28,12 @@ builder.Services.Configure<EmailSettings>(builder.Configuration.GetSection("Emai
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen(cfg =>
 {
+    cfg.CustomSchemaIds(type => type.FullName!.Replace('+', '.'));
     cfg.SwaggerDoc("v1", new Microsoft.OpenApi.Models.OpenApiInfo
     {
         Title = "Auth API",
         Version = "v1"
     });
-    //cfg.SchemaFilter<ApplicationResultSchemaFilter>();
 });
 builder.Services
     .AddControllers(opt =>
@@ -120,6 +120,13 @@ builder.Services.AddApiVersioning(options =>
     options.ReportApiVersions = true;
 });
 
+// Add versioned API explorer for Swagger to understand versioned routes
+builder.Services.AddVersionedApiExplorer(options =>
+{
+    options.GroupNameFormat = "'v'VVV";
+    options.SubstituteApiVersionInUrl = true;
+});
+
 builder.Services.AddScoped<ICurrentUserService, CurrentUserService>();
 builder.Services.AddScoped<IUnitOfWork, UnitOfWork>();
 builder.Services.AddScoped<IApplicationUserRepository, ApplicationUserRepository>();
@@ -134,26 +141,42 @@ builder.Services.AddTransient<IEmailTemplateService, EmailTemplateService>();
 
 builder.Services.AddSingleton<IConnectionMultiplexer>(sp =>
 {
-    var configuration = builder.Configuration.GetConnectionString("Redis")!;
-    return ConnectionMultiplexer.Connect(configuration);
+    var host = builder.Configuration.GetConnectionString("Redis:Host")!;
+    var port = builder.Configuration.GetConnectionString("Redis:Port")!;
+    var password = builder.Configuration.GetConnectionString("Redis:Password")!;
+    var ssl = bool.TryParse(builder.Configuration.GetConnectionString("Redis:Ssl")!, out var sslValue) && sslValue;
+    var user = builder.Configuration.GetConnectionString("Redis:User")!;
+
+    ConfigurationOptions conf = new() {
+        EndPoints = {$"{host}:{port}"},
+        Password = password,
+        Ssl = ssl,
+        User = user
+    };
+    
+    return ConnectionMultiplexer.Connect(conf);
 });
 
 var app = builder.Build();
 
-await DbInit.Seed(app.Services);
-app.UseMiddleware<GlobalExceptionHandler>();
-app.UseAuthentication();
-app.UseAuthorization();
-app.UseHttpsRedirection();
-app.MapGroup("/api")
-    .MapControllers();
+
 
 if (app.Environment.IsDevelopment())
 {
     app.UseSwagger();
     app.UseSwaggerUI(c =>
     {
+        //c.RoutePrefix = "api";
         c.SwaggerEndpoint("/swagger/v1/swagger.json", "My API v1");
     });
 }
+
+await DbInit.Seed(app.Services);
+app.UseMiddleware<GlobalExceptionHandler>();
+app.UseAuthentication();
+app.UseAuthorization();
+app.MapControllers();
+//app.UseHttpsRedirection();
+
+
 app.Run();
